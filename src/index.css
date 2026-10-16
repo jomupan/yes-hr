@@ -1,0 +1,139 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* HR System design tokens — "Paper & Ink" editorial palette with blue/amber/green/red accents */
+@layer base {
+  :root {
+    --background: 42 27% 95%;
+    --foreground: 215 43% 18%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 215 43% 18%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 43% 18%;
+
+    --primary: 215 43% 18%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 42 20% 91%;
+    --secondary-foreground: 215 43% 18%;
+
+    --muted: 42 20% 91%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 210 47% 36%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 4 57% 46%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 42 18% 82%;
+    --input: 42 18% 82%;
+    --ring: 210 47% 36%;
+
+    --radius: 0.625rem;
+
+    /* HR-specific semantic tokens */
+    --ink: 215 43% 18%;
+    --paper: 42 27% 95%;
+    --paper-2: 42 22% 90%;
+    --blue: 210 47% 36%;
+    --blue-dark: 211 53% 25%;
+    --blue-light: 210 42% 64%;
+    --blue-pale: 210 47% 93%;
+    --amber: 38 58% 45%;
+    --amber-pale: 42 67% 93%;
+    --green: 143 33% 36%;
+    --green-pale: 140 30% 92%;
+    --red: 4 57% 46%;
+    --red-pale: 4 60% 94%;
+
+    --sidebar-background: 215 43% 18%;
+    --sidebar-foreground: 220 18% 90%;
+    --sidebar-primary: 210 47% 36%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 47% 36%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 215 30% 28%;
+    --sidebar-ring: 210 42% 64%;
+  }
+
+  .dark {
+    --background: 215 43% 10%;
+    --foreground: 42 27% 95%;
+    --card: 215 43% 14%;
+    --card-foreground: 42 27% 95%;
+    --popover: 215 43% 14%;
+    --popover-foreground: 42 27% 95%;
+    --primary: 42 27% 95%;
+    --primary-foreground: 215 43% 18%;
+    --secondary: 215 30% 22%;
+    --secondary-foreground: 42 27% 95%;
+    --muted: 215 30% 22%;
+    --muted-foreground: 220 14% 65%;
+    --accent: 210 47% 56%;
+    --accent-foreground: 215 43% 10%;
+    --destructive: 4 57% 56%;
+    --destructive-foreground: 215 43% 10%;
+    --border: 215 30% 26%;
+    --input: 215 30% 26%;
+    --ring: 210 47% 56%;
+    --ink: 42 27% 95%;
+    --paper: 215 43% 10%;
+    --paper-2: 215 30% 16%;
+    --blue: 210 47% 56%;
+    --blue-dark: 210 47% 46%;
+    --blue-light: 210 42% 70%;
+    --blue-pale: 210 47% 22%;
+    --amber: 38 58% 55%;
+    --amber-pale: 38 50% 20%;
+    --green: 143 33% 46%;
+    --green-pale: 143 30% 18%;
+    --red: 4 57% 56%;
+    --red-pale: 4 50% 20%;
+    --sidebar-background: 215 50% 8%;
+    --sidebar-foreground: 220 18% 80%;
+    --sidebar-primary: 210 47% 46%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 47% 30%;
+    --sidebar-accent-foreground: 42 27% 95%;
+    --sidebar-border: 215 30% 20%;
+    --sidebar-ring: 210 42% 64%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "ss01", "cv01";
+  }
+}
+
+@layer base {
+  h1,
+  h2,
+  h3 {
+    font-family: "Archivo Black", system-ui, sans-serif;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+  }
+  .font-mono-hr {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+  }
+}
+
+/* Subtle scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 8px;
+}

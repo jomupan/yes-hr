@@ -1,0 +1,29 @@
+# Render Blueprint for YES HR (free plan, no card needed).
+# On render.com: New > Blueprint > pick this GitHub repo. Render then asks for
+# the two values marked "sync: false" below.
+services:
+  - type: web
+    name: yes-hr
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # /api/ping doesn't touch the database, so Neon's free database can
+    # pause when nobody is using the app (saves its monthly free hours).
+    healthCheckPath: /api/ping
+    envVars:
+      - key: DB_CLIENT
+        value: pg
+      - key: FILE_STORAGE
+        value: db
+      - key: APP_TIMEZONE
+        value: Asia/Kuala_Lumpur
+      - key: JWT_SECRET
+        generateValue: true
+      # Paste Neon's connection string (starts with postgresql://).
+      - key: DATABASE_URL
+        sync: false
+      # Your admin password: 8+ chars with upper, lower and a number.
+      - key: SEED_ADMIN_PASSWORD
+        sync: false

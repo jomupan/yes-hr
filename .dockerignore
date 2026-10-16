@@ -1,0 +1,13 @@
+# Keep uploads small and never ship local data or secrets.
+node_modules
+dist
+backend/node_modules
+backend/dist
+backend/data
+backend/uploads
+backend/.env
+.env
+*.log
+tunnel.log
+.git
+Start YES HR.bat
