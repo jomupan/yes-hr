@@ -10,7 +10,7 @@ import {
   AdminInput,
   AdminSelect,
 } from "@/components/admin/ui";
-import { getAllLeaveApplications } from "@/lib/admin-store";
+import { useAdminLeaveApps } from "@/lib/api-hr";
 import { fmtDate } from "@/lib/hr-store";
 
 const PAGE_SIZE = 8;
@@ -23,7 +23,7 @@ export function AdminLeaveRecords() {
   const [yearFilter, setYearFilter] = useState("all");
   const [page, setPage] = useState(1);
 
-  const apps = useMemo(() => getAllLeaveApplications(), []);
+  const apps = useAdminLeaveApps();
 
   const employeeOptions = useMemo(() => {
     const map = new Map<string, string>();

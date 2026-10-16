@@ -13,6 +13,7 @@ import { publicRouter } from "./routes/public";
 import { meRouter } from "./routes/me";
 import { notificationsRouter } from "./routes/notifications";
 import { adminRouter } from "./routes/admin";
+import { calendarRouter } from "./routes/calendar";
 
 export function createApp() {
   const app = express();
@@ -63,6 +64,7 @@ export function createApp() {
   app.use("/api/public", publicRouter);
   app.use("/api/me", requireAuth, meRouter);
   app.use("/api/notifications", requireAuth, notificationsRouter);
+  app.use("/api/calendar", requireAuth, calendarRouter);
   app.use("/api/admin", requireAuth, adminRouter);
 
   // Serve the built website (npm run build in the main folder) from the

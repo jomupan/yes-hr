@@ -92,6 +92,38 @@ export async function notifyAdmins(input: Omit<CreateInput, "userId">, trx: Knex
   for (const id of admins) await createNotification({ ...input, userId: id }, trx);
 }
 
+/** Send the same notification to every active user except `exceptUserId`,
+ *  in a single insert (fast even for a large staff list). */
+export async function notifyEveryone(
+  input: Omit<CreateInput, "userId">,
+  exceptUserId: string | null,
+  trx: Knex = db,
+): Promise<void> {
+  const q = trx("users").where({ account_status: "active" });
+  if (exceptUserId) q.whereNot({ id: exceptUserId });
+  const ids: string[] = await q.pluck("id");
+  if (!ids.length) return;
+  const now = nowISO();
+  await trx.batchInsert(
+    "notifications",
+    ids.map((userId) => ({
+      id: newId(),
+      user_id: userId,
+      category: input.category,
+      title: input.title,
+      message: input.message,
+      is_read: false,
+      created_at: now,
+      related_id: input.relatedId ?? null,
+      action_label: input.actionLabel ?? null,
+      action_module: input.actionModule ?? null,
+      admin_path: input.adminPath ?? null,
+      priority: input.priority ?? null,
+    })),
+    100,
+  );
+}
+
 /* ---------- domain triggers (same wording as the frontend) ---------- */
 
 export const notify = {

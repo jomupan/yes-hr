@@ -1,11 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ClaimType } from "@/lib/hr-types";
 import type { UseHrSession } from "@/hooks/use-hr-session";
-import { fmtDate, uid } from "@/lib/hr-store";
-import {
-  notifyClaimSubmitted,
-  notifyAdminClaimSubmitted,
-} from "@/lib/notification-store";
+import { fmtDate } from "@/lib/hr-store";
+import { fetchMyClaims, submitClaim } from "@/lib/api-hr";
 import { StatusBadge } from "./Leave";
 
 interface Props {
@@ -21,6 +18,15 @@ export function Claim({ hr }: Props) {
   const [date, setDate] = useState("");
   const [desc, setDesc] = useState("");
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // Show the latest status from the server (e.g. approved by an admin).
+  const updateClaim = hr.updateClaim;
+  const refreshFromServer = async () => updateClaim({ claims: await fetchMyClaims() });
+  useEffect(() => {
+    refreshFromServer().catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const claims = [...session.claim.claims].sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
@@ -29,26 +35,24 @@ export function Claim({ hr }: Props) {
     .filter((c) => c.status === "Approved")
     .reduce((s, c) => s + Number(c.amount), 0);
 
-  const submit = () => {
+  const submit = async () => {
+    if (saving) return;
     const amt = parseFloat(amount);
     if (!amt || amt <= 0 || !date || !desc.trim()) {
       setError("Please complete all fields.");
       return;
     }
-    const newClaim = {
-      id: uid(),
-      type,
-      amount: amt,
-      date,
-      desc: desc.trim(),
-      status: "Pending" as const,
-    };
-    const updated = {
-      claims: [...session.claim.claims, newClaim],
-    };
-    hr.updateClaim(updated);
-    notifyClaimSubmitted(session.username, newClaim.id);
-    notifyAdminClaimSubmitted(session.profile.fullName, amt, newClaim.id);
+    setSaving(true);
+    try {
+      // Saved on the server, which also notifies the admins.
+      await submitClaim({ type, amount: amt, date, desc: desc.trim() });
+      await refreshFromServer();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't submit. Please try again.");
+      return;
+    } finally {
+      setSaving(false);
+    }
     setAmount("");
     setDate("");
     setDesc("");
@@ -176,9 +180,10 @@ export function Claim({ hr }: Props) {
         )}
         <button
           onClick={submit}
-          className="mt-1.5 inline-flex items-center justify-center px-4 py-2.5 rounded-lg border border-[hsl(var(--ink))] bg-[hsl(var(--ink))] text-white text-sm font-semibold hover:bg-[hsl(var(--blue-dark))] hover:border-[hsl(var(--blue-dark))] transition-colors"
+          disabled={saving}
+          className="mt-1.5 inline-flex items-center justify-center px-4 py-2.5 rounded-lg border border-[hsl(var(--ink))] bg-[hsl(var(--ink))] text-white text-sm font-semibold hover:bg-[hsl(var(--blue-dark))] hover:border-[hsl(var(--blue-dark))] transition-colors disabled:opacity-50"
         >
-          Submit claim
+          {saving ? "Submitting…" : "Submit claim"}
         </button>
       </div>
 

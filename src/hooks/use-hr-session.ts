@@ -58,6 +58,7 @@ export interface UseHrSession {
   loginWithCredentials: (
     identifier: string,
     password: string,
+    remember?: boolean,
   ) => Promise<UserRole | null>;
   register: (
     name: string,
@@ -165,7 +166,7 @@ export function useHrSession(): UseHrSession {
   );
 
   const loginWithCredentials = useCallback(
-    async (identifier: string, password: string): Promise<UserRole | null> => {
+    async (identifier: string, password: string, remember = false): Promise<UserRole | null> => {
       if (!identifier.trim() || !password) {
         setAuthError("Invalid email, Staff ID, or password.");
         return null;
@@ -173,7 +174,7 @@ export function useHrSession(): UseHrSession {
       try {
         // The backend checks the password, account status and role.
         const res = await authApi.login(identifier.trim(), password);
-        startServerSession(res);
+        startServerSession(res, remember);
         await syncServerRecords(res.session.username);
       } catch (e) {
         setAuthError(e instanceof Error ? e.message : "Unable to log in.");

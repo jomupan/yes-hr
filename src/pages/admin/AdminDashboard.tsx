@@ -16,18 +16,15 @@ import {
   Avatar,
   AdminBtn,
 } from "@/components/admin/ui";
-import {
-  getAllLeaveApplications,
-  getAdminEmployees,
-  isOnLeaveOn,
-} from "@/lib/admin-store";
+import { getAdminEmployees, isOnLeaveOn } from "@/lib/admin-store";
+import { useAdminLeaveApps } from "@/lib/api-hr";
 import { fmtDate, todayISO, daysBetween } from "@/lib/hr-store";
 import { isAccountActive } from "@/lib/account-status";
 import { useNavigate } from "react-router-dom";
 
 export function AdminDashboard() {
   const navigate = useNavigate();
-  const apps = getAllLeaveApplications();
+  const apps = useAdminLeaveApps();
   const employees = getAdminEmployees();
 
   const pending = apps.filter((a) => a.status === "Pending").length;

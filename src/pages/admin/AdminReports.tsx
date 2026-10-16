@@ -20,7 +20,8 @@ import {
 } from "recharts";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { Card, SectionTitle, Avatar } from "@/components/admin/ui";
-import { getAllLeaveApplications, getAdminEmployees } from "@/lib/admin-store";
+import { getAdminEmployees } from "@/lib/admin-store";
+import { useAdminLeaveApps } from "@/lib/api-hr";
 import { isAccountActive } from "@/lib/account-status";
 
 const MONTHS = [
@@ -40,7 +41,7 @@ const MONTHS = [
 const PIE_COLORS = ["#f59e0b", "#22c55e", "#ef4444"];
 
 export function AdminReports() {
-  const apps = useMemo(() => getAllLeaveApplications(), []);
+  const apps = useAdminLeaveApps();
   const employees = useMemo(() => getAdminEmployees(), []);
 
   // Applications by month (current year)

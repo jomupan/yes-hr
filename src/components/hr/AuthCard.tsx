@@ -26,13 +26,18 @@ function LoginCard({ hr }: Props) {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
-  const [remember, setRemember] = useState(true);
+  // Unticked by default: the login ends when the app is closed, so shared
+  // devices always start at the login page. Tick to stay logged in.
+  const [remember, setRemember] = useState(false);
+  const idleLogout =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("reason") === "idle";
   const [submitting, setSubmitting] = useState(false);
 
   const submit = async () => {
     if (submitting) return;
     setSubmitting(true);
-    const role = await hr.loginWithCredentials(identifier, password);
+    const role = await hr.loginWithCredentials(identifier, password, remember);
     setSubmitting(false);
     if (!role) return; // error message set in hr.authError
     // Role-based redirect
@@ -73,6 +78,11 @@ function LoginCard({ hr }: Props) {
         <h1 className="text-[24px] leading-[1.15] mb-[18px] text-center">
           Log in to your account
         </h1>
+        {idleLogout && (
+          <div className="text-xs text-center text-muted-foreground bg-[hsl(var(--paper-2))] border border-border rounded-lg px-3 py-2 mb-4">
+            You were logged out after 30 minutes of inactivity.
+          </div>
+        )}
 
         {/* Identifier */}
         <div className="mb-3.5">

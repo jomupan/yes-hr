@@ -1,14 +1,13 @@
 /* Bridges backend logins with the browser store the rest of the app reads.
  *
- * Login, registration and password reset now go through the backend. The
- * other modules (attendance, leave, claims, ...) still read the browser
- * store, so after a successful server login we copy the server's profile
- * into that store. As each module moves to the API, it stops depending on
- * this copy. */
+ * Login, registration and password reset go through the backend. The staff
+ * screens read a browser copy of the user's records, which is refreshed from
+ * the server at login, at app start and after every change. */
 
 import type { UserProfile } from "./hr-types";
-import { authApi, ApiError, getToken, setToken, type AuthResponse, type ApiSessionBundle } from "./api";
+import { authApi, ApiError, getToken, isRemembered, setToken, type AuthResponse, type ApiSessionBundle } from "./api";
 import { syncMyAttendance } from "./api-attendance";
+import { syncMyHrRecords } from "./api-hr";
 import { getSessionUsername, getUser, getUserIndex, setJSON, setSession, setUserIndex } from "./hr-store";
 
 /** Write the server's profile into the local store (keeps local-only fields). */
@@ -30,17 +29,78 @@ export function syncProfile(bundle: ApiSessionBundle): void {
 }
 
 /** Save the token + profile from a login/register response and start the session. */
-export function startServerSession(res: AuthResponse): void {
-  setToken(res.token);
+export function startServerSession(res: AuthResponse, remember = false): void {
+  setToken(res.token, remember);
   syncProfile(res.session);
   setSession(res.session.username);
+  markActive();
 }
 
-/** Pull the records that already live on the server into the browser
- *  store (currently: attendance). Failures are ignored, so a slow or
- *  offline server never blocks logging in. */
+/* ---------- automatic logout after inactivity ----------
+   For logins without "Remember me": if the app sits unused (or in the
+   background on a phone) for IDLE_LIMIT_MS, the next touch sends the user
+   back to the login page. */
+const IDLE_LIMIT_MS = 30 * 60 * 1000;
+const LAST_ACTIVE_KEY = "hr:lastActive";
+
+function markActive(): void {
+  try {
+    sessionStorage.setItem(LAST_ACTIVE_KEY, String(Date.now()));
+  } catch {
+    /* ignore */
+  }
+}
+
+function idleTooLong(): boolean {
+  if (!getToken() || isRemembered()) return false;
+  try {
+    const last = Number(sessionStorage.getItem(LAST_ACTIVE_KEY) || 0);
+    return last > 0 && Date.now() - last > IDLE_LIMIT_MS;
+  } catch {
+    return false;
+  }
+}
+
+function logoutForIdle(): void {
+  setSession(null);
+  window.location.replace("/login?reason=idle");
+}
+
+/** Call once at startup. Watches for activity and logs out idle sessions. */
+export function installIdleLogout(): void {
+  if (idleTooLong()) {
+    setSession(null);
+    return; // main.tsx renders; the login page shows the "logged out" note
+  }
+  let lastWrite = 0;
+  const onActivity = () => {
+    if (idleTooLong()) return logoutForIdle();
+    const now = Date.now();
+    if (now - lastWrite > 15_000) {
+      lastWrite = now;
+      markActive();
+    }
+  };
+  for (const ev of ["pointerdown", "keydown", "scroll", "touchstart"]) {
+    window.addEventListener(ev, onActivity, { passive: true });
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") onActivity();
+  });
+  window.setInterval(() => {
+    if (idleTooLong()) logoutForIdle();
+  }, 60_000);
+}
+
+/** Pull the user's records from the server into the browser store the
+ *  staff screens read (attendance, leave, claims, personality test,
+ *  evaluations). Failures are ignored, so a slow or offline server never
+ *  blocks logging in. */
 export async function syncServerRecords(username: string): Promise<void> {
-  await syncMyAttendance(username).catch(() => undefined);
+  await Promise.all([
+    syncMyAttendance(username).catch(() => undefined),
+    syncMyHrRecords(username),
+  ]);
 }
 
 /** True when a token is stored for the current browser session. */

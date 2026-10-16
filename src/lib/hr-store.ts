@@ -277,8 +277,17 @@ export function getSessionUsername(): string | null {
 
 export function setSession(username: string | null): void {
   setJSON(K.session, { username });
-  // Logging out also drops the backend token (see lib/api.ts).
-  if (username === null) removeKey("hr:token");
+  // Logging out also drops the backend token (see lib/api.ts), wherever
+  // it was kept, plus the inactivity timestamp.
+  if (username === null) {
+    removeKey("hr:token");
+    try {
+      sessionStorage.removeItem("hr:token");
+      sessionStorage.removeItem("hr:lastActive");
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 /* ---------- user index ---------- */

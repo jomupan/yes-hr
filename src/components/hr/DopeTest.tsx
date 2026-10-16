@@ -8,9 +8,9 @@ import {
   DOPE_VALID_DAYS,
   DOPE_PERSONALITY_TYPES,
 } from "@/lib/hr-constants";
-import { buildDopeResult, fmtDate, fmtTime, todayISO } from "@/lib/hr-store";
+import { fmtDate, fmtTime, todayISO } from "@/lib/hr-store";
 import { downloadDopeResult } from "@/lib/dope-download";
-import { notifyAdminDopeCompleted } from "@/lib/notification-store";
+import { fetchMyDope, submitDope } from "@/lib/api-hr";
 
 interface Props {
   hr: UseHrSession;
@@ -28,6 +28,8 @@ export function DopeTest({ hr, forced, onComplete }: Props) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [checks, setChecks] = useState<Record<number, boolean>>({});
   const [latestResult, setLatestResult] = useState<DopeResult | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   const history = [...session.dope.history].sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
@@ -60,21 +62,29 @@ export function DopeTest({ hr, forced, onComplete }: Props) {
     setPhase("questions");
   };
 
-  const submitTest = () => {
-    if (!allChecked) return;
+  const submitTest = async () => {
+    if (!allChecked || submitting) return;
     const answerList: DopeAnswer[] = DOPE_QUESTIONS.map((q) => ({
       questionId: q.id,
       optionId: answers[q.id],
     }));
-    const result = buildDopeResult(answerList);
-    const updated = {
-      history: [...session.dope.history, result],
-    };
-    hr.updateDope(updated);
+    setSubmitting(true);
+    setSubmitError("");
+    let result: DopeResult;
+    let history: DopeResult[];
+    try {
+      // Scored and saved on the server (which also notifies the admins).
+      result = await submitDope(answerList);
+      history = await fetchMyDope().catch(() => [...session.dope.history, result]);
+    } catch (e) {
+      setSubmitError(e instanceof Error ? e.message : "Couldn't submit. Please try again.");
+      setSubmitting(false);
+      return;
+    }
+    setSubmitting(false);
+    hr.updateDope({ history });
     setLatestResult(result);
     setPhase("result");
-    // Notify admins that a staff member completed the personality test.
-    notifyAdminDopeCompleted(session.profile.fullName, result.personalityType);
     onComplete?.();
   };
 
@@ -352,13 +362,16 @@ export function DopeTest({ hr, forced, onComplete }: Props) {
               </label>
             </div>
           ))}
+          {submitError && (
+            <div className="text-[hsl(var(--red))] text-xs mt-3">{submitError}</div>
+          )}
           <div className="flex gap-2 flex-wrap mt-3.5">
             <button
               onClick={submitTest}
-              disabled={!allChecked}
+              disabled={!allChecked || submitting}
               className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg border border-[hsl(var(--ink))] bg-[hsl(var(--ink))] text-white text-sm font-semibold hover:bg-[hsl(var(--blue-dark))] hover:border-[hsl(var(--blue-dark))] transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
             >
-              Submit & View Results
+              {submitting ? "Submitting…" : "Submit & View Results"}
             </button>
             <button
               onClick={() => setPhase("questions")}

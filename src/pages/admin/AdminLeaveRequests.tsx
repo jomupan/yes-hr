@@ -10,11 +10,8 @@ import {
   AdminInput,
   AdminSelect,
 } from "@/components/admin/ui";
-import {
-  getAllLeaveApplications,
-  setLeaveStatus,
-  type AdminLeaveRow,
-} from "@/lib/admin-store";
+import type { AdminLeaveRow } from "@/lib/admin-store";
+import { setLeaveStatusOnServer, useAdminLeaveApps } from "@/lib/api-hr";
 import { downloadAttachment, fmtDate } from "@/lib/hr-store";
 import { useAdminSession } from "@/hooks/use-admin-session";
 
@@ -23,12 +20,18 @@ export function AdminLeaveRequests() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selected, setSelected] = useState<AdminLeaveRow | null>(null);
+  const [selected, setSelectedRaw] = useState<AdminLeaveRow | null>(null);
+  // Clear any old error when opening or closing a request.
+  const setSelected = (row: AdminLeaveRow | null) => {
+    setActionError("");
+    setSelectedRaw(row);
+  };
   const [rejecting, setRejecting] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
-  const [tick, setTick] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [actionError, setActionError] = useState("");
 
-  const apps = useMemo(() => getAllLeaveApplications(), [tick]);
+  const apps = useAdminLeaveApps();
 
   const filtered = apps.filter((a) => {
     const matchSearch =
@@ -40,28 +43,28 @@ export function AdminLeaveRequests() {
     return matchSearch && matchType && matchStatus;
   });
 
-  const approve = () => {
-    if (!selected) return;
-    setLeaveStatus(selected.username, selected.appId, "Approved");
-    setSelected(null);
-    setTick((t) => t + 1);
-    session.refresh();
+  // Saved on the server: balance is adjusted there and the staff member
+  // is notified on their own device.
+  const decide = async (status: "Approved" | "Rejected", reason?: string) => {
+    if (!selected || saving) return;
+    setSaving(true);
+    setActionError("");
+    try {
+      await setLeaveStatusOnServer(selected.appId, status, reason);
+      setRejecting(false);
+      setRejectReason("");
+      setSelected(null);
+      session.refresh();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Couldn't save. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const confirmReject = () => {
-    if (!selected) return;
-    setLeaveStatus(
-      selected.username,
-      selected.appId,
-      "Rejected",
-      rejectReason.trim() || undefined,
-    );
-    setRejecting(false);
-    setRejectReason("");
-    setSelected(null);
-    setTick((t) => t + 1);
-    session.refresh();
-  };
+  const approve = () => void decide("Approved");
+
+  const confirmReject = () => void decide("Rejected", rejectReason.trim() || undefined);
 
   return (
     <AdminLayout>
@@ -315,27 +318,38 @@ export function AdminLeaveRequests() {
                     variant="danger"
                     className="flex-1"
                     onClick={confirmReject}
+                    disabled={saving}
                   >
-                    <X className="w-4 h-4" /> Confirm Reject
+                    <X className="w-4 h-4" /> {saving ? "Saving…" : "Confirm Reject"}
                   </AdminBtn>
                 </div>
+                {actionError && (
+                  <p className="text-xs text-rose-300 mt-3">{actionError}</p>
+                )}
               </div>
             ) : (
-              <div className="flex gap-3 p-5 border-t border-white/10">
-                <AdminBtn
-                  variant="danger"
-                  className="flex-1"
-                  onClick={() => setRejecting(true)}
-                >
-                  <X className="w-4 h-4" /> Reject
-                </AdminBtn>
-                <AdminBtn
-                  variant="success"
-                  className="flex-1"
-                  onClick={approve}
-                >
-                  <Check className="w-4 h-4" /> Approve
-                </AdminBtn>
+              <div className="p-5 border-t border-white/10">
+                <div className="flex gap-3">
+                  <AdminBtn
+                    variant="danger"
+                    className="flex-1"
+                    onClick={() => setRejecting(true)}
+                    disabled={saving}
+                  >
+                    <X className="w-4 h-4" /> Reject
+                  </AdminBtn>
+                  <AdminBtn
+                    variant="success"
+                    className="flex-1"
+                    onClick={approve}
+                    disabled={saving}
+                  >
+                    <Check className="w-4 h-4" /> {saving ? "Saving…" : "Approve"}
+                  </AdminBtn>
+                </div>
+                {actionError && (
+                  <p className="text-xs text-rose-300 mt-3">{actionError}</p>
+                )}
               </div>
             )}
           </div>

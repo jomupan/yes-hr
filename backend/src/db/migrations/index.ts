@@ -1,6 +1,7 @@
 import type { Knex } from "knex";
 import * as m001 from "./001_initial";
 import * as m002 from "./002_stored_files";
+import * as m003 from "./003_calendar_events";
 
 /* Migrations are registered in code (not discovered from disk) so they run
    the same way under `tsx` in development and from compiled `dist/`. Add new
@@ -8,6 +9,7 @@ import * as m002 from "./002_stored_files";
 const migrations: Record<string, Knex.Migration> = {
   "001_initial": m001,
   "002_stored_files": m002,
+  "003_calendar_events": m003,
 };
 
 export const migrationSource: Knex.MigrationSource<string> = {

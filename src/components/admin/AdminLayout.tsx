@@ -8,7 +8,7 @@ import {
   YES_EMPIRE_LOGO,
 } from "@/lib/admin-constants";
 import { useAdminSession } from "@/hooks/use-admin-session";
-import { getAllLeaveApplications } from "@/lib/admin-store";
+import { useAdminLeaveApps } from "@/lib/api-hr";
 import { initials } from "@/lib/hr-store";
 import { AdminNotificationBell } from "@/components/admin/AdminNotificationBell";
 
@@ -22,7 +22,7 @@ export function AdminLayout({ children }: Props) {
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const pendingCount = getAllLeaveApplications().filter(
+  const pendingCount = useAdminLeaveApps().filter(
     (a) => a.status === "Pending",
   ).length;
 

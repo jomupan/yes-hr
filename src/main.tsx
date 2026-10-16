@@ -1,7 +1,10 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
-import { verifyStoredSession } from "./lib/api-session";
+import { installIdleLogout, verifyStoredSession } from "./lib/api-session";
+
+// Log out sessions left idle (without "Remember me") for 30+ minutes.
+installIdleLogout();
 
 // Check any saved login with the backend before the first render, so an
 // expired token or a deactivated account goes straight to the login page.

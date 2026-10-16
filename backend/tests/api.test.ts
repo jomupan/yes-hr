@@ -282,3 +282,37 @@ describe("admin", () => {
     expect(r.body.personality.completed).toBe(1);
   });
 });
+
+describe("calendar notes", () => {
+  let id = "";
+  it("admin adds a note that every staff member can read and is notified about", async () => {
+    const bad = await request(app).post("/api/admin/calendar").set(auth(adminToken)).send({ title: "", from: "2026-11-03" });
+    expect(bad.status).toBe(400);
+    const backwards = await request(app).post("/api/admin/calendar").set(auth(adminToken)).send({ title: "Trip", from: "2026-11-05", to: "2026-11-03" });
+    expect(backwards.status).toBe(400);
+    const r = await request(app).post("/api/admin/calendar").set(auth(adminToken))
+      .send({ title: "Town hall", note: "Main hall, 3pm", from: "2026-11-03" });
+    expect(r.status).toBe(201);
+    expect(r.body.event.to).toBe("2026-11-03");
+    id = r.body.event.id;
+    const list = await request(app).get("/api/calendar?from=2026-11-01&to=2026-11-30").set(auth(staffToken));
+    expect(list.body.events.map((e: any) => e.title)).toContain("Town hall");
+    const n = await request(app).get("/api/notifications").set(auth(staffToken));
+    expect(n.body.notifications.some((x: any) => x.title === "New Calendar Note" && x.actionModule === "calendar")).toBe(true);
+  });
+
+  it("staff can't add, edit or delete notes", async () => {
+    expect((await request(app).post("/api/admin/calendar").set(auth(staffToken)).send({ title: "x", from: "2026-11-03" })).status).toBe(403);
+    expect((await request(app).delete(`/api/admin/calendar/${id}`).set(auth(staffToken))).status).toBe(403);
+  });
+
+  it("admin edits and deletes a note", async () => {
+    const e = await request(app).put(`/api/admin/calendar/${id}`).set(auth(adminToken))
+      .send({ title: "Town hall (moved)", from: "2026-11-04", to: "2026-11-05", category: "reminder" });
+    expect(e.status).toBe(200);
+    expect(e.body.event.to).toBe("2026-11-05");
+    expect((await request(app).delete(`/api/admin/calendar/${id}`).set(auth(adminToken))).status).toBe(200);
+    const list = await request(app).get("/api/calendar?from=2026-11-01&to=2026-11-30").set(auth(staffToken));
+    expect(list.body.events).toHaveLength(0);
+  });
+});

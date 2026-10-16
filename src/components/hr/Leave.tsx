@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Paperclip, X } from "lucide-react";
 import type { LeaveAttachment, LeaveType } from "@/lib/hr-types";
 import type { UseHrSession } from "@/hooks/use-hr-session";
@@ -8,14 +8,9 @@ import {
   downloadAttachment,
   fmtDate,
   formatFileSize,
-  nowISO,
-  uid,
   validateAttachment,
 } from "@/lib/hr-store";
-import {
-  notifyLeaveSubmitted,
-  notifyAdminLeaveSubmitted,
-} from "@/lib/notification-store";
+import { applyLeave, fetchMyLeave } from "@/lib/api-hr";
 
 interface Props {
   hr: UseHrSession;
@@ -30,6 +25,15 @@ export function Leave({ hr }: Props) {
   const [error, setError] = useState("");
   const [attachment, setAttachment] = useState<LeaveAttachment | null>(null);
   const [fileError, setFileError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // Show the latest status from the server (e.g. approved by an admin).
+  const updateLeave = hr.updateLeave;
+  const refreshFromServer = async () => updateLeave(await fetchMyLeave());
+  useEffect(() => {
+    refreshFromServer().catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const types = Object.keys(session.leave.balance) as LeaveType[];
   const apps = [...session.leave.applications].sort(
@@ -64,7 +68,8 @@ export function Leave({ hr }: Props) {
     }
   };
 
-  const submit = () => {
+  const submit = async () => {
+    if (saving) return;
     if (!from || !to || !reason.trim()) {
       setError("Please complete all fields.");
       return;
@@ -82,37 +87,18 @@ export function Leave({ hr }: Props) {
       setError(`Insufficient ${type} leave balance.`);
       return;
     }
-    const newApp = {
-      id: uid(),
-      type,
-      from,
-      to,
-      reason: reason.trim(),
-      status: "Pending" as const,
-      appliedAt: nowISO(),
-      attachment: attachment || null,
-    };
-    const updated = {
-      ...session.leave,
-      applications: [...session.leave.applications, newApp],
-    };
-    hr.updateLeave(updated);
-    // Notify the staff member that their application was submitted.
-    notifyLeaveSubmitted(
-      session.username,
-      type,
-      fmtDate(from),
-      fmtDate(to),
-      newApp.id,
-    );
-    // Notify every admin that a new leave application needs review.
-    notifyAdminLeaveSubmitted(
-      session.profile.fullName,
-      type,
-      fmtDate(from),
-      fmtDate(to),
-      newApp.id,
-    );
+    setSaving(true);
+    try {
+      // The server re-checks everything (balance, overlapping dates,
+      // Medical certificate) and notifies the admins.
+      await applyLeave({ type, from, to, reason: reason.trim(), attachment });
+      await refreshFromServer();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't submit. Please try again.");
+      return;
+    } finally {
+      setSaving(false);
+    }
     setFrom("");
     setTo("");
     setReason("");
@@ -284,9 +270,10 @@ export function Leave({ hr }: Props) {
         )}
         <button
           onClick={submit}
-          className="mt-1.5 inline-flex items-center justify-center px-4 py-2.5 rounded-lg border border-[hsl(var(--ink))] bg-[hsl(var(--ink))] text-white text-sm font-semibold hover:bg-[hsl(var(--blue-dark))] hover:border-[hsl(var(--blue-dark))] transition-colors"
+          disabled={saving}
+          className="mt-1.5 inline-flex items-center justify-center px-4 py-2.5 rounded-lg border border-[hsl(var(--ink))] bg-[hsl(var(--ink))] text-white text-sm font-semibold hover:bg-[hsl(var(--blue-dark))] hover:border-[hsl(var(--blue-dark))] transition-colors disabled:opacity-50"
         >
-          Submit application
+          {saving ? "Submitting…" : "Submit application"}
         </button>
       </div>
 

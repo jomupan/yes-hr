@@ -1,54 +1,73 @@
 import { useCallback, useEffect, useState } from "react";
 import type { HrNotification } from "@/lib/hr-types";
-import {
-  deleteNotification as delNotif,
-  getNotifications,
-  markAllRead,
-  markNotificationRead,
-} from "@/lib/notification-store";
+import { api } from "@/lib/api";
+
+/* How often open screens check the server for new notifications. */
+const POLL_MS = 60_000;
 
 /**
- * Per-user notification state. A user can only ever read their own
- * notifications (keyed by username in the store), so this hook always
- * scopes to the current session username.
+ * The logged-in user's notifications, from the server. Every bell and
+ * notifications page uses this hook, so a leave approval made by an admin
+ * on a laptop reaches the staff member's phone. The server only ever
+ * returns the current user's own notifications.
+ *
+ * `username` is kept as the signature the screens already use; a null
+ * username (logged out) means no notifications.
  */
 export function useNotifications(username: string | null) {
   const [items, setItems] = useState<HrNotification[]>([]);
-  const [tick, setTick] = useState(0);
 
-  // Re-read from the store whenever the user or tick changes.
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!username) {
       setItems([]);
       return;
     }
-    setItems(getNotifications(username));
-  }, [username, tick]);
+    try {
+      const res = await api<{ notifications: HrNotification[] }>("/notifications");
+      setItems(res.notifications);
+    } catch {
+      /* offline or logged out: keep what's on screen */
+    }
+  }, [username]);
 
-  const refresh = useCallback(() => setTick((t) => t + 1), []);
+  // Load now, then poll while the page is visible.
+  useEffect(() => {
+    void load();
+    const id = window.setInterval(() => {
+      if (document.visibilityState === "visible") void load();
+    }, POLL_MS);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [load]);
 
+  const refresh = useCallback(() => void load(), [load]);
+
+  // Update the screen straight away, then tell the server.
   const markRead = useCallback(
     (id: string) => {
-      if (!username) return;
-      markNotificationRead(username, id);
-      setItems(getNotifications(username));
+      setItems((list) => list.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+      api(`/notifications/${encodeURIComponent(id)}/read`, { method: "PATCH" }).catch(() => void load());
     },
-    [username],
+    [load],
   );
 
   const markAll = useCallback(() => {
-    if (!username) return;
-    markAllRead(username);
-    setItems(getNotifications(username));
-  }, [username]);
+    setItems((list) => list.map((n) => ({ ...n, isRead: true })));
+    api("/notifications/read-all", { method: "POST" }).catch(() => void load());
+  }, [load]);
 
   const remove = useCallback(
     (id: string) => {
-      if (!username) return;
-      delNotif(username, id);
-      setItems(getNotifications(username));
+      setItems((list) => list.filter((n) => n.id !== id));
+      api(`/notifications/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => void load());
     },
-    [username],
+    [load],
   );
 
   const unread = items.filter((n) => !n.isRead).length;

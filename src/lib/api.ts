@@ -12,18 +12,32 @@ export const API_BASE: string =
 
 const TOKEN_KEY = "hr:token";
 
-export function getToken(): string | null {
+/* Where the login token lives:
+ *  - sessionStorage (default): gone when the app/browser is closed, so the
+ *    next open starts at the login page. Right for shared devices.
+ *  - localStorage ("Remember me" ticked): stays logged in on this device. */
+function store(kind: "session" | "local"): Storage | null {
   try {
-    return localStorage.getItem(TOKEN_KEY);
+    return kind === "session" ? sessionStorage : localStorage;
   } catch {
     return null;
   }
 }
 
-export function setToken(token: string | null): void {
+export function getToken(): string | null {
+  return store("session")?.getItem(TOKEN_KEY) ?? store("local")?.getItem(TOKEN_KEY) ?? null;
+}
+
+/** True when the current login was made with "Remember me". */
+export function isRemembered(): boolean {
+  return !!store("local")?.getItem(TOKEN_KEY);
+}
+
+export function setToken(token: string | null, remember = false): void {
   try {
-    if (token) localStorage.setItem(TOKEN_KEY, token);
-    else localStorage.removeItem(TOKEN_KEY);
+    store("session")?.removeItem(TOKEN_KEY);
+    store("local")?.removeItem(TOKEN_KEY);
+    if (token) store(remember ? "local" : "session")?.setItem(TOKEN_KEY, token);
   } catch {
     /* storage unavailable: token lives for this page only */
   }
