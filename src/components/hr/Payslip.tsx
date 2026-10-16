@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Download, FileText, Image as ImageIcon, Eye } from "lucide-react";
 import type { UseHrSession } from "@/hooks/use-hr-session";
 import {
   getPayslipsForUser,
   downloadPayslip,
   periodLabel,
+  syncMyPayslips,
   type PayslipRecord,
 } from "@/lib/payslips";
 import { formatFileSize } from "@/lib/attachment";
@@ -34,6 +35,13 @@ export function Payslip({ hr }: Props) {
     payslips.find((p) => p.id === selectedId) || payslips[0] || null;
 
   const refresh = () => setTick((t) => t + 1);
+
+  // Load the latest payslips from the server each time this screen opens.
+  useEffect(() => {
+    syncMyPayslips()
+      .then(refresh)
+      .catch(() => undefined);
+  }, [username]);
 
   return (
     <>

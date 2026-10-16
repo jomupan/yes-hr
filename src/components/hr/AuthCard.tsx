@@ -26,9 +26,10 @@ function LoginCard({ hr }: Props) {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
-  // Unticked by default: the login ends when the app is closed, so shared
-  // devices always start at the login page. Tick to stay logged in.
-  const [remember, setRemember] = useState(false);
+  // Ticked by default: staff log in once on their own phone and the app
+  // then opens straight to Attendance. Untick on a shared device, so the
+  // login ends when the app is closed (and after 30 minutes idle).
+  const [remember, setRemember] = useState(true);
   const idleLogout =
     typeof window !== "undefined" &&
     new URLSearchParams(window.location.search).get("reason") === "idle";

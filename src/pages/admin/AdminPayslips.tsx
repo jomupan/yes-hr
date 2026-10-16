@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Plus,
   RefreshCw,
@@ -27,6 +27,7 @@ import {
   getAllPayslips,
   getActiveEmployeesForPayslip,
   removePayslip,
+  syncAdminPayslips,
   monthName,
   periodLabel,
   type PayslipRecord,
@@ -34,6 +35,7 @@ import {
 import { departmentOf, companyOf, employeeIdOf } from "@/lib/admin-store";
 import { fmtDate } from "@/lib/hr-store";
 import { useAdminSession } from "@/hooks/use-admin-session";
+import { syncAdminDirectory, useAdminDirectory } from "@/lib/api-admin";
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 const YEARS = (() => {
@@ -64,23 +66,38 @@ export function AdminPayslips() {
   const [month, setMonth] = useState<number | "">("");
   const [year, setYear] = useState<number | "">("");
 
-  const employees = useMemo(() => getActiveEmployeesForPayslip(), [tick]);
+  const directory = useAdminDirectory();
+  const employees = useMemo(
+    () => getActiveEmployeesForPayslip(),
+    [tick, directory],
+  );
   const payslips = useMemo(() => getAllPayslips(), [tick]);
 
+  // Load the latest payslips from the server.
   const refresh = () => {
     setRefreshing(true);
     setError("");
-    setTimeout(() => {
-      setTick((t) => t + 1);
-      setLastUpdated(
-        new Date().toLocaleTimeString("en-GB", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-      );
-      setRefreshing(false);
-    }, 250);
+    Promise.all([syncAdminPayslips(), syncAdminDirectory()])
+      .then(() =>
+        setLastUpdated(
+          new Date().toLocaleTimeString("en-GB", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+        ),
+      )
+      .catch((e) =>
+        setError(e instanceof Error ? e.message : "Unable to load payslips."),
+      )
+      .finally(() => {
+        setTick((t) => t + 1);
+        setRefreshing(false);
+      });
   };
+
+  useEffect(() => {
+    refresh();
+  }, []);
 
   const deptOptions = useMemo(() => {
     const set = new Map<string, string>();
@@ -126,9 +143,9 @@ export function AdminPayslips() {
     return true;
   });
 
-  const handleRemove = () => {
+  const handleRemove = async () => {
     if (!removing) return;
-    const r = removePayslip(removing.id);
+    const r = await removePayslip(removing.id);
     if (!r.ok) {
       setError(r.error || "Unable to remove payslip.");
       return;

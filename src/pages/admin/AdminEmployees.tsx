@@ -22,11 +22,8 @@ import {
   type AdminEmployee,
 } from "@/lib/admin-store";
 import { useAdminSession } from "@/hooks/use-admin-session";
-import {
-  isAccountActive,
-  deactivateStaff,
-  reactivateStaff,
-} from "@/lib/account-status";
+import { isAccountActive } from "@/lib/account-status";
+import { setEmployeeActiveOnServer, useAdminDirectory } from "@/lib/api-admin";
 import { getActiveCompanies } from "@/lib/companies";
 import { getActiveDepartmentsByCompany } from "@/lib/departments";
 
@@ -47,13 +44,16 @@ export function AdminEmployees() {
     employee: AdminEmployee;
   } | null>(null);
   const [actionError, setActionError] = useState("");
+  const [saving, setSaving] = useState(false);
+  // Changes whenever the latest employee list arrives from the server.
+  const directory = useAdminDirectory();
 
-  const employees = useMemo(() => getAdminEmployees(), [tick]);
-  const companies = useMemo(() => getActiveCompanies(), [tick]);
+  const employees = useMemo(() => getAdminEmployees(), [tick, directory]);
+  const companies = useMemo(() => getActiveCompanies(), [tick, directory]);
   // Department options depend on the selected company filter.
   const deptOptions = useMemo(
     () => (companyFilter ? getActiveDepartmentsByCompany(companyFilter) : []),
-    [companyFilter, tick],
+    [companyFilter, tick, directory],
   );
 
   const filtered = employees.filter((e) => {
@@ -86,23 +86,34 @@ export function AdminEmployees() {
     setConfirm({ type: "reactivate", employee });
   };
 
-  const confirmAction = () => {
-    if (!confirm) return;
-    if (confirm.type === "remove") {
-      const result = deactivateStaff(
-        confirm.employee.username,
-        adminSession.username || "",
+  // Saved on the server, so a deactivated staff member is logged out on
+  // their phone straight away.
+  const confirmAction = async () => {
+    if (!confirm || saving) return;
+    const remove = confirm.type === "remove";
+    const isAdminAccount =
+      confirm.employee.profile.authRole === "admin" ||
+      !!confirm.employee.profile.isAdmin;
+    if (remove && isAdminAccount) {
+      setActionError("Admin accounts cannot be deactivated.");
+      return;
+    }
+    if (remove && confirm.employee.username === adminSession.username) {
+      setActionError("You cannot deactivate your own account.");
+      return;
+    }
+    setSaving(true);
+    const result = await setEmployeeActiveOnServer(
+      confirm.employee.username,
+      !remove,
+    );
+    setSaving(false);
+    if (!result.ok) {
+      setActionError(
+        result.error ||
+          (remove ? "Unable to deactivate staff." : "Unable to reactivate staff."),
       );
-      if (!result.ok) {
-        setActionError(result.error || "Unable to deactivate staff.");
-        return;
-      }
-    } else {
-      const result = reactivateStaff(confirm.employee.username);
-      if (!result.ok) {
-        setActionError(result.error || "Unable to reactivate staff.");
-        return;
-      }
+      return;
     }
     setConfirm(null);
     setActionError("");

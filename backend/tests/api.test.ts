@@ -66,6 +66,17 @@ describe("auth", () => {
     }
   });
 
+  it("gives a long login only when Remember me is ticked", async () => {
+    const life = async (remember?: boolean) => {
+      const r = await request(app).post("/api/auth/login").send({ identifier: "admin", password: "admin123", remember });
+      expect(r.status).toBe(200);
+      const p = JSON.parse(Buffer.from(r.body.token.split(".")[1], "base64url").toString());
+      return p.exp - p.iat;
+    };
+    expect(await life()).toBeLessThan(24 * 3600 + 1);
+    expect(await life(true)).toBe(30 * 24 * 3600);
+  });
+
   it("rejects bad credentials with one generic message", async () => {
     const a = await request(app).post("/api/auth/login").send({ identifier: "admin", password: "nope" });
     const b = await request(app).post("/api/auth/login").send({ identifier: "ghost", password: "nope" });

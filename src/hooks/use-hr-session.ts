@@ -173,7 +173,7 @@ export function useHrSession(): UseHrSession {
       }
       try {
         // The backend checks the password, account status and role.
-        const res = await authApi.login(identifier.trim(), password);
+        const res = await authApi.login(identifier.trim(), password, remember);
         startServerSession(res, remember);
         await syncServerRecords(res.session.username);
       } catch (e) {
@@ -235,7 +235,7 @@ export function useHrSession(): UseHrSession {
           departmentId,
           companyId,
         });
-        startServerSession(res);
+        startServerSession(res, true);
         await syncServerRecords(res.session.username);
         // Keep the admin bell in this browser in step until notifications
         // move to the API too.

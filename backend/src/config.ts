@@ -24,6 +24,8 @@ export const config = {
 
   jwtSecret: process.env.JWT_SECRET || "dev-only-secret-change-me",
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "8h",
+  /** Login length when "Remember me" is ticked. */
+  jwtRememberExpiresIn: process.env.JWT_REMEMBER_EXPIRES_IN || "30d",
 
   dbClient: (process.env.DB_CLIENT || "sqlite") as "sqlite" | "mysql" | "pg",
   sqliteFile: process.env.SQLITE_FILE || "./data/yeselevate.db",

@@ -8,7 +8,7 @@ import {
   YES_EMPIRE_LOGO,
 } from "@/lib/admin-constants";
 import { useAdminSession } from "@/hooks/use-admin-session";
-import { useAdminLeaveApps } from "@/lib/api-hr";
+import { useAdminClaims, useAdminLeaveApps } from "@/lib/api-hr";
 import { initials } from "@/lib/hr-store";
 import { AdminNotificationBell } from "@/components/admin/AdminNotificationBell";
 
@@ -25,6 +25,7 @@ export function AdminLayout({ children }: Props) {
   const pendingCount = useAdminLeaveApps().filter(
     (a) => a.status === "Pending",
   ).length;
+  const pendingClaims = useAdminClaims().filter((c) => c.status === "Pending").length;
 
   const go = (path: string) => {
     navigate(path);
@@ -84,6 +85,11 @@ export function AdminLayout({ children }: Props) {
                         {item.id === "leave-requests" && pendingCount > 0 && (
                           <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-amber-500 text-slate-950 text-[10px] font-bold">
                             {pendingCount}
+                          </span>
+                        )}
+                        {item.id === "claims" && pendingClaims > 0 && (
+                          <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-amber-500 text-slate-950 text-[10px] font-bold">
+                            {pendingClaims}
                           </span>
                         )}
                       </button>

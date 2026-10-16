@@ -12,15 +12,18 @@ import { AdminLayout } from "@/components/admin/AdminLayout";
 import { Card, EmptyState, AdminBtn, AdminInput } from "@/components/admin/ui";
 import {
   getAllDepartments,
-  addDepartment,
-  renameDepartment,
-  deactivateDepartment,
-  reactivateDepartment,
-  deleteDepartmentIfEmpty,
   type Department,
 } from "@/lib/departments";
 import { getActiveCompanies } from "@/lib/companies";
 import { getAdminEmployees, departmentOf } from "@/lib/admin-store";
+import {
+  addDepartmentOnServer,
+  deleteDepartmentOnServer,
+  setDepartmentActiveOnServer,
+  updateDepartmentOnServer,
+  useAdminDirectory,
+  type ActionResult,
+} from "@/lib/api-admin";
 
 type Filter = "active" | "inactive" | "all";
 
@@ -31,8 +34,9 @@ export function AdminDepartments() {
   const [editing, setEditing] = useState<Department | null>(null);
   const [error, setError] = useState("");
 
-  const departments = useMemo(() => getAllDepartments(), [tick]);
-  const employees = useMemo(() => getAdminEmployees(), [tick]);
+  const directory = useAdminDirectory();
+  const departments = useMemo(() => getAllDepartments(), [tick, directory]);
+  const employees = useMemo(() => getAdminEmployees(), [tick, directory]);
 
   const countFor = (id: string) =>
     employees.filter((e) => {
@@ -51,35 +55,30 @@ export function AdminDepartments() {
     setTick((t) => t + 1);
   };
 
-  const handleDeactivate = (d: Department) => {
+  // Changes are saved on the server, then the list is refreshed.
+  const apply = async (p: Promise<ActionResult>, fallback: string) => {
     setError("");
-    const r = deactivateDepartment(d.id);
+    const r = await p;
     if (!r.ok) {
-      setError(r.error || "Unable to deactivate department.");
-      return;
+      setError(r.error || fallback);
+      return false;
     }
     refresh();
+    return true;
   };
 
-  const handleReactivate = (d: Department) => {
-    setError("");
-    const r = reactivateDepartment(d.id);
-    if (!r.ok) {
-      setError(r.error || "Unable to reactivate department.");
-      return;
-    }
-    refresh();
-  };
+  const handleDeactivate = (d: Department) =>
+    void apply(setDepartmentActiveOnServer(d.id, false), "Unable to deactivate department.");
+
+  const handleReactivate = (d: Department) =>
+    void apply(setDepartmentActiveOnServer(d.id, true), "Unable to reactivate department.");
 
   const handleDelete = (d: Department) => {
-    setError("");
-    const count = countFor(d.id);
-    const r = deleteDepartmentIfEmpty(d.id, count);
-    if (!r.ok) {
-      setError(r.error || "Unable to delete department.");
+    if (countFor(d.id) > 0) {
+      setError("Cannot delete a department that still has employees assigned.");
       return;
     }
-    refresh();
+    void apply(deleteDepartmentOnServer(d.id), "Unable to delete department.");
   };
 
   const filterTabs: { id: Filter; label: string }[] = [
@@ -248,15 +247,12 @@ export function AdminDepartments() {
         <DepartmentFormModal
           title="Add Department"
           onClose={() => setShowAdd(false)}
-          onSubmit={(name, code, companyId) => {
-            const r = addDepartment(name, companyId, code);
-            if (!r.ok) {
-              setError(r.error || "Unable to add department.");
-              return false;
-            }
-            refresh();
-            return true;
-          }}
+          onSubmit={(name, code, companyId) =>
+            apply(
+              addDepartmentOnServer(name, companyId, code),
+              "Unable to add department.",
+            )
+          }
         />
       )}
 
@@ -265,15 +261,12 @@ export function AdminDepartments() {
           title="Rename Department"
           initial={editing}
           onClose={() => setEditing(null)}
-          onSubmit={(name, code, companyId) => {
-            const r = renameDepartment(editing.id, name, companyId, code);
-            if (!r.ok) {
-              setError(r.error || "Unable to rename department.");
-              return false;
-            }
-            refresh();
-            return true;
-          }}
+          onSubmit={(name, code, companyId) =>
+            apply(
+              updateDepartmentOnServer(editing.id, name, companyId, code),
+              "Unable to rename department.",
+            )
+          }
         />
       )}
     </AdminLayout>
@@ -289,7 +282,11 @@ function DepartmentFormModal({
   title: string;
   initial?: Department;
   onClose: () => void;
-  onSubmit: (name: string, code: string, companyId: string) => boolean;
+  onSubmit: (
+    name: string,
+    code: string,
+    companyId: string,
+  ) => Promise<boolean>;
 }) {
   const [name, setName] = useState(initial?.name || "");
   const [code, setCode] = useState(initial?.code || "");
@@ -298,7 +295,7 @@ function DepartmentFormModal({
 
   const companies = getActiveCompanies();
 
-  const submit = () => {
+  const submit = async () => {
     setLocalError("");
     if (!name.trim()) {
       setLocalError("Department name is required.");
@@ -308,7 +305,7 @@ function DepartmentFormModal({
       setLocalError("Please select a company.");
       return;
     }
-    const ok = onSubmit(name, code, companyId);
+    const ok = await onSubmit(name, code, companyId);
     if (ok) onClose();
   };
 

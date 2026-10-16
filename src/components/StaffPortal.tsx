@@ -21,7 +21,8 @@ interface StaffPortalProps {
   initialModule?: ModuleId;
 }
 
-export function StaffPortal({ initialModule = "dashboard" }: StaffPortalProps) {
+// Staff open the app to clock in, so Attendance is the first screen.
+export function StaffPortal({ initialModule = "attendance" }: StaffPortalProps) {
   const hr = useHrSession();
   const navigate = useNavigate();
   const [activeModule, setActiveModule] = useState<ModuleId>(initialModule);

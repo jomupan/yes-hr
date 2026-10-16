@@ -21,6 +21,7 @@ import {
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { Card, SectionTitle, Avatar } from "@/components/admin/ui";
 import { getAdminEmployees } from "@/lib/admin-store";
+import { useAdminDirectory } from "@/lib/api-admin";
 import { useAdminLeaveApps } from "@/lib/api-hr";
 import { isAccountActive } from "@/lib/account-status";
 
@@ -42,7 +43,8 @@ const PIE_COLORS = ["#f59e0b", "#22c55e", "#ef4444"];
 
 export function AdminReports() {
   const apps = useAdminLeaveApps();
-  const employees = useMemo(() => getAdminEmployees(), []);
+  const directory = useAdminDirectory();
+  const employees = useMemo(() => getAdminEmployees(), [directory]);
 
   // Applications by month (current year)
   const year = new Date().getFullYear();

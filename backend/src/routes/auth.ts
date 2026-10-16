@@ -39,7 +39,11 @@ authRouter.post(
   loginLimiter,
   asyncHandler(async (req, res) => {
     const body = parse(
-      z.object({ identifier: z.string().trim().min(1, "Required"), password: z.string().min(1, "Required") }),
+      z.object({
+        identifier: z.string().trim().min(1, "Required"),
+        password: z.string().min(1, "Required"),
+        remember: z.boolean().optional().default(false),
+      }),
       req.body,
     );
     const user = await findUserByIdentifier(body.identifier);
@@ -47,7 +51,7 @@ authRouter.post(
     if (!user || !(await verifyPassword(body.password, user.password_hash))) throw unauthorized(INVALID, "INVALID_CREDENTIALS");
     if (user.account_status === "inactive")
       throw forbidden("This account is no longer active. Please contact HR for assistance.", "ACCOUNT_INACTIVE");
-    res.json({ ok: true, token: signToken(user), session: await buildSessionBundle(user) });
+    res.json({ ok: true, token: signToken(user, body.remember), session: await buildSessionBundle(user) });
   }),
 );
 
@@ -106,7 +110,8 @@ authRouter.post(
       await notify.adminStaffRegistered(u.full_name, u.username, trx);
       return u;
     });
-    res.status(201).json({ ok: true, token: signToken(user), session: await buildSessionBundle(user) });
+    // New staff are on their own phone: keep them logged in.
+    res.status(201).json({ ok: true, token: signToken(user, true), session: await buildSessionBundle(user) });
   }),
 );
 

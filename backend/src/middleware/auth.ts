@@ -21,9 +21,12 @@ interface TokenPayload {
   role: string;
 }
 
-export function signToken(user: UserRow): string {
+/** `remember` ("Remember me") gives a long-lived login so staff sign in
+ *  once on their own phone. Deactivating the account still blocks it at
+ *  once, because every request re-checks the user in the database. */
+export function signToken(user: UserRow, remember = false): string {
   return jwt.sign({ sub: user.id, role: user.auth_role } satisfies TokenPayload, config.jwtSecret, {
-    expiresIn: config.jwtExpiresIn as jwt.SignOptions["expiresIn"],
+    expiresIn: (remember ? config.jwtRememberExpiresIn : config.jwtExpiresIn) as jwt.SignOptions["expiresIn"],
   });
 }
 

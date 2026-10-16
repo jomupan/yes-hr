@@ -25,6 +25,7 @@ import { AdminDepartments } from "@/pages/admin/AdminDepartments";
 import { AdminCompanies } from "@/pages/admin/AdminCompanies";
 import { AdminPayslips } from "@/pages/admin/AdminPayslips";
 import { AdminAdmins } from "@/pages/admin/AdminAdmins";
+import { AdminClaims } from "@/pages/admin/AdminClaims";
 
 const queryClient = new QueryClient();
 
@@ -123,6 +124,14 @@ const App = () => (
             element={
               <AdminRoute>
                 <AdminCompanies />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/claims"
+            element={
+              <AdminRoute>
+                <AdminClaims />
               </AdminRoute>
             }
           />

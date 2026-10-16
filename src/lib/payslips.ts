@@ -14,7 +14,12 @@ import {
   ATTACHMENT_MAX_BYTES,
 } from "./attachment";
 import { isAccountActive } from "./account-status";
-import { notifyPayslipAvailable } from "./notification-store";
+import { API_BASE, ApiError, api, fileUrl, getToken } from "./api";
+
+/* Payslips now live on the server. The browser keeps a copy under
+   `hr:payslips` (server download path in file.url, never the login token);
+   dataUrl is filled in with an authenticated link each time it is read.
+   The original notes below describe the record shape, which is unchanged. */
 
 /* ---------- payslip records ----------
    Payslips are stored in a single shared store keyed `hr:payslips`, each
@@ -32,8 +37,10 @@ export interface PayslipFile {
   type: string;
   /** File size in bytes. */
   size: number;
-  /** Base64 data URL used to persist & re-download the file. */
+  /** Link used to show & download the file (authenticated server URL). */
   dataUrl: string;
+  /** Server download path, as stored in the browser copy. */
+  url?: string;
 }
 
 export type PayslipStatus = "active" | "removed";
@@ -55,12 +62,44 @@ export interface PayslipRecord {
 const PAYSLIPS_KEY = "hr:payslips";
 
 function getAllRaw(): PayslipRecord[] {
-  return getJSON<PayslipRecord[]>(PAYSLIPS_KEY, []);
+  return getJSON<PayslipRecord[]>(PAYSLIPS_KEY, []).map((p) =>
+    p.file?.url ? { ...p, file: { ...p.file, dataUrl: fileUrl(`${p.file.url}?inline=1`) } } : p,
+  );
 }
 
-function saveAll(list: PayslipRecord[]): void {
-  setJSON(PAYSLIPS_KEY, list);
+/* ---------- server sync ---------- */
+
+/** Admin: copy every payslip (active + removed) from the server. */
+export async function syncAdminPayslips(): Promise<void> {
+  const res = await api<{ payslips: PayslipRecord[] }>("/admin/payslips?status=all");
+  setJSON(PAYSLIPS_KEY, res.payslips);
 }
+
+/** Staff: copy the logged-in employee's own payslips from the server. */
+export async function syncMyPayslips(): Promise<void> {
+  const res = await api<{ payslips: PayslipRecord[] }>("/me/payslips");
+  setJSON(PAYSLIPS_KEY, res.payslips);
+}
+
+/** Multipart upload with the same error handling as api(). */
+async function sendForm<T>(method: "POST" | "PUT", path: string, form: FormData): Promise<T> {
+  const token = getToken();
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method,
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: form,
+    });
+  } catch {
+    throw new ApiError("Can't reach the server. Please check your connection and try again.", 0, "OFFLINE");
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.ok === false) throw new ApiError(data.error || "Something went wrong.", res.status, data.code);
+  return data as T;
+}
+
+const errText = (e: unknown, fallback: string) => (e instanceof Error && e.message) || fallback;
 
 export interface PayslipSaveResult {
   ok: boolean;
@@ -160,47 +199,28 @@ export async function uploadPayslip(
   year: number,
   file: File,
   note: string,
-  uploadedBy: string,
+  _uploadedBy: string,
 ): Promise<PayslipSaveResult> {
+  void _uploadedBy; // the server records who is logged in
   if (!username) return { ok: false, error: "Please select an employee." };
-  const employee = getUser(username);
-  if (!employee) return { ok: false, error: "Employee not found." };
   if (!month || !year)
     return { ok: false, error: "Please select a month and year." };
-  const existing = findPayslip(username, month, year);
-  if (existing) {
-    return {
-      ok: false,
-      error: `A payslip already exists for this employee for ${periodLabel(month, year)}.`,
-    };
-  }
   const fv = validatePayslipFile(file);
   if (!fv.ok) return { ok: false, error: fv.error };
-  const built = await buildPayslipFile(file);
-  if (!built)
-    return {
-      ok: false,
-      error: "Only PDF, JPG, JPEG and PNG files are allowed.",
-    };
-  const now = nowISO();
-  const record: PayslipRecord = {
-    id: uid(),
-    username,
-    month,
-    year,
-    file: built,
-    note: note.trim() || undefined,
-    status: "active",
-    uploadedBy,
-    createdAt: now,
-    updatedAt: now,
-  };
-  const list = getAllRaw();
-  list.push(record);
-  saveAll(list);
-  // Notify only the owning employee.
-  notifyPayslipAvailable(username, periodLabel(month, year), record.id);
-  return { ok: true, payslip: record };
+  const form = new FormData();
+  form.append("username", username);
+  form.append("month", String(month));
+  form.append("year", String(year));
+  if (note.trim()) form.append("note", note.trim());
+  form.append("file", file, sanitizeFileName(file.name));
+  try {
+    // The server notifies only the owning employee.
+    const res = await sendForm<{ payslip: PayslipRecord }>("POST", "/admin/payslips", form);
+    await syncAdminPayslips().catch(() => undefined);
+    return { ok: true, payslip: res.payslip };
+  } catch (e) {
+    return { ok: false, error: errText(e, "Unable to upload payslip.") };
+  }
 }
 
 /** Replace an existing payslip's file (keeps the same record id). */
@@ -208,34 +228,28 @@ export async function replacePayslipFile(
   id: string,
   file: File,
 ): Promise<PayslipSaveResult> {
-  const list = getAllRaw();
-  const idx = list.findIndex((p) => p.id === id);
-  if (idx === -1) return { ok: false, error: "Payslip not found." };
   const fv = validatePayslipFile(file);
   if (!fv.ok) return { ok: false, error: fv.error };
-  const built = await buildPayslipFile(file);
-  if (!built)
-    return {
-      ok: false,
-      error: "Only PDF, JPG, JPEG and PNG files are allowed.",
-    };
-  list[idx] = {
-    ...list[idx],
-    file: built,
-    updatedAt: nowISO(),
-  };
-  saveAll(list);
-  return { ok: true, payslip: list[idx] };
+  const form = new FormData();
+  form.append("file", file, sanitizeFileName(file.name));
+  try {
+    const res = await sendForm<{ payslip: PayslipRecord }>("PUT", `/admin/payslips/${encodeURIComponent(id)}/file`, form);
+    await syncAdminPayslips().catch(() => undefined);
+    return { ok: true, payslip: res.payslip };
+  } catch (e) {
+    return { ok: false, error: errText(e, "Unable to replace payslip.") };
+  }
 }
 
 /** Soft-remove a payslip (status -> removed). Staff can no longer see it. */
-export function removePayslip(id: string): PayslipSaveResult {
-  const list = getAllRaw();
-  const idx = list.findIndex((p) => p.id === id);
-  if (idx === -1) return { ok: false, error: "Payslip not found." };
-  list[idx] = { ...list[idx], status: "removed", updatedAt: nowISO() };
-  saveAll(list);
-  return { ok: true, payslip: list[idx] };
+export async function removePayslip(id: string): Promise<PayslipSaveResult> {
+  try {
+    await api(`/admin/payslips/${encodeURIComponent(id)}`, { method: "DELETE" });
+    await syncAdminPayslips().catch(() => undefined);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: errText(e, "Unable to remove payslip.") };
+  }
 }
 
 /** Resolve the employee profile for a payslip (regardless of active state). */

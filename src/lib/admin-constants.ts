@@ -13,6 +13,7 @@ import {
   Layers,
   FileText,
   ShieldCheck,
+  Receipt,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -65,6 +66,13 @@ export const ADMIN_NAV: AdminNavItem[] = [
     label: "Attendance",
     path: "/admin/attendance",
     icon: Clock,
+    group: "EMPLOYEES",
+  },
+  {
+    id: "claims",
+    label: "Claims",
+    path: "/admin/claims",
+    icon: Receipt,
     group: "EMPLOYEES",
   },
   {

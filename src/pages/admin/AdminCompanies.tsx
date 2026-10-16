@@ -12,17 +12,20 @@ import { AdminLayout } from "@/components/admin/AdminLayout";
 import { Card, EmptyState, AdminBtn, AdminInput } from "@/components/admin/ui";
 import {
   getAllCompanies,
-  addCompany,
-  updateCompany,
-  deactivateCompany,
-  reactivateCompany,
-  deleteCompanyIfEmpty,
   getCompanyById,
   type Company,
   type CompanyType,
 } from "@/lib/companies";
 import { getAllDepartments } from "@/lib/departments";
 import { getAdminEmployees, companyOf } from "@/lib/admin-store";
+import {
+  addCompanyOnServer,
+  deleteCompanyOnServer,
+  setCompanyActiveOnServer,
+  updateCompanyOnServer,
+  useAdminDirectory,
+  type ActionResult,
+} from "@/lib/api-admin";
 
 type Filter = "active" | "inactive" | "all";
 
@@ -33,9 +36,10 @@ export function AdminCompanies() {
   const [editing, setEditing] = useState<Company | null>(null);
   const [error, setError] = useState("");
 
-  const companies = useMemo(() => getAllCompanies(), [tick]);
-  const departments = useMemo(() => getAllDepartments(), [tick]);
-  const employees = useMemo(() => getAdminEmployees(), [tick]);
+  const directory = useAdminDirectory();
+  const companies = useMemo(() => getAllCompanies(), [tick, directory]);
+  const departments = useMemo(() => getAllDepartments(), [tick, directory]);
+  const employees = useMemo(() => getAdminEmployees(), [tick, directory]);
 
   const deptCountFor = (id: string) =>
     departments.filter((d) => d.companyId === id).length;
@@ -54,35 +58,26 @@ export function AdminCompanies() {
     setTick((t) => t + 1);
   };
 
-  const handleDeactivate = (c: Company) => {
+  // Changes are saved on the server, then the list is refreshed.
+  const apply = async (p: Promise<ActionResult>, fallback: string) => {
     setError("");
-    const r = deactivateCompany(c.id);
+    const r = await p;
     if (!r.ok) {
-      setError(r.error || "Unable to deactivate company.");
-      return;
+      setError(r.error || fallback);
+      return false;
     }
     refresh();
+    return true;
   };
 
-  const handleReactivate = (c: Company) => {
-    setError("");
-    const r = reactivateCompany(c.id);
-    if (!r.ok) {
-      setError(r.error || "Unable to reactivate company.");
-      return;
-    }
-    refresh();
-  };
+  const handleDeactivate = (c: Company) =>
+    void apply(setCompanyActiveOnServer(c.id, false), "Unable to deactivate company.");
 
-  const handleDelete = (c: Company) => {
-    setError("");
-    const r = deleteCompanyIfEmpty(c.id, deptCountFor(c.id), empCountFor(c.id));
-    if (!r.ok) {
-      setError(r.error || "Unable to delete company.");
-      return;
-    }
-    refresh();
-  };
+  const handleReactivate = (c: Company) =>
+    void apply(setCompanyActiveOnServer(c.id, true), "Unable to reactivate company.");
+
+  const handleDelete = (c: Company) =>
+    void apply(deleteCompanyOnServer(c.id), "Unable to delete company.");
 
   const filterTabs: { id: Filter; label: string }[] = [
     { id: "active", label: "Active" },
@@ -265,15 +260,12 @@ export function AdminCompanies() {
         <CompanyFormModal
           title="Add Company"
           onClose={() => setShowAdd(false)}
-          onSubmit={(name, code, type, parentId) => {
-            const r = addCompany(name, code, type, parentId);
-            if (!r.ok) {
-              setError(r.error || "Unable to add company.");
-              return false;
-            }
-            refresh();
-            return true;
-          }}
+          onSubmit={(name, code, type, parentId) =>
+            apply(
+              addCompanyOnServer(name, code, type, parentId),
+              "Unable to add company.",
+            )
+          }
         />
       )}
 
@@ -282,15 +274,12 @@ export function AdminCompanies() {
           title="Edit Company"
           initial={editing}
           onClose={() => setEditing(null)}
-          onSubmit={(name, code, type, parentId) => {
-            const r = updateCompany(editing.id, name, code, type, parentId);
-            if (!r.ok) {
-              setError(r.error || "Unable to update company.");
-              return false;
-            }
-            refresh();
-            return true;
-          }}
+          onSubmit={(name, code, type, parentId) =>
+            apply(
+              updateCompanyOnServer(editing.id, name, code, type, parentId),
+              "Unable to update company.",
+            )
+          }
         />
       )}
     </AdminLayout>
@@ -311,7 +300,7 @@ function CompanyFormModal({
     code: string,
     type: CompanyType,
     parentId: string | null,
-  ) => boolean;
+  ) => Promise<boolean>;
 }) {
   const [name, setName] = useState(initial?.name || "");
   const [code, setCode] = useState(initial?.code || "");
@@ -326,13 +315,13 @@ function CompanyFormModal({
     (c) => c.active && c.type === "parent" && c.id !== initial?.id,
   );
 
-  const submit = () => {
+  const submit = async () => {
     setLocalError("");
     if (!name.trim()) {
       setLocalError("Company name is required.");
       return;
     }
-    const ok = onSubmit(
+    const ok = await onSubmit(
       name,
       code,
       type,

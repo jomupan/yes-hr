@@ -119,8 +119,8 @@ export interface AuthResponse {
 }
 
 export const authApi = {
-  login: (identifier: string, password: string) =>
-    api<AuthResponse>("/auth/login", { body: { identifier, password }, auth: false }),
+  login: (identifier: string, password: string, remember = false) =>
+    api<AuthResponse>("/auth/login", { body: { identifier, password, remember }, auth: false }),
   register: (body: {
     name: string;
     username: string;

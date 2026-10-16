@@ -235,3 +235,71 @@ export async function setLeaveStatusOnServer(
 export function isOnLeave(from: string, to: string, iso: string): boolean {
   return iso >= from && iso <= to;
 }
+
+/* ---------- admin: shared claims list ---------- */
+
+export interface AdminClaimRow extends ClaimRecord {
+  username: string;
+  fullName: string;
+  department: string;
+  createdAt?: string;
+  rejectionReason?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+}
+
+let adminClaims: AdminClaimRow[] = [];
+let adminClaimsLoaded = false;
+let adminClaimsLoading: Promise<void> | null = null;
+const claimListeners = new Set<() => void>();
+
+export function reloadAdminClaims(): Promise<void> {
+  if (adminClaimsLoading) return adminClaimsLoading;
+  adminClaimsLoading = api<{ claims: AdminClaimRow[] }>("/admin/claims")
+    .then((res) => {
+      adminClaims = res.claims;
+      adminClaimsLoaded = true;
+      claimListeners.forEach((l) => l());
+    })
+    .catch(() => undefined)
+    .finally(() => {
+      adminClaimsLoading = null;
+    });
+  return adminClaimsLoading;
+}
+
+/** All claims (newest first) for admin screens; shared like the leave list. */
+export function useAdminClaims(): AdminClaimRow[] {
+  const claims = useSyncExternalStore(
+    (cb) => {
+      claimListeners.add(cb);
+      return () => claimListeners.delete(cb);
+    },
+    () => adminClaims,
+  );
+  useEffect(() => {
+    if (!adminClaimsLoaded) void reloadAdminClaims();
+    const id = window.setInterval(() => {
+      if (document.visibilityState === "visible") void reloadAdminClaims();
+    }, 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+  return claims;
+}
+
+/** Approve / reject a claim; the staff member is notified on their device. */
+export async function setClaimStatusOnServer(
+  id: string,
+  status: "Pending" | "Approved" | "Rejected",
+  rejectionReason?: string,
+): Promise<void> {
+  await api(`/admin/claims/${encodeURIComponent(id)}/status`, {
+    method: "PATCH",
+    body: { status, rejectionReason },
+  });
+  await reloadAdminClaims();
+}
+
+/** Current copies of the shared admin lists (no fetch). */
+export const adminLeaveSnapshot = (): AdminLeaveRow[] => adminLeave;
+export const adminClaimsSnapshot = (): AdminClaimRow[] => adminClaims;
