@@ -8,6 +8,7 @@
 
 import type { UserProfile } from "./hr-types";
 import { authApi, ApiError, getToken, setToken, type AuthResponse, type ApiSessionBundle } from "./api";
+import { syncMyAttendance } from "./api-attendance";
 import { getSessionUsername, getUser, getUserIndex, setJSON, setSession, setUserIndex } from "./hr-store";
 
 /** Write the server's profile into the local store (keeps local-only fields). */
@@ -35,6 +36,13 @@ export function startServerSession(res: AuthResponse): void {
   setSession(res.session.username);
 }
 
+/** Pull the records that already live on the server into the browser
+ *  store (currently: attendance). Failures are ignored, so a slow or
+ *  offline server never blocks logging in. */
+export async function syncServerRecords(username: string): Promise<void> {
+  await syncMyAttendance(username).catch(() => undefined);
+}
+
 /** True when a token is stored for the current browser session. */
 export function hasServerSession(): boolean {
   return !!getToken() && !!getSessionUsername();
@@ -60,6 +68,7 @@ export async function verifyStoredSession(): Promise<void> {
     const { session } = await authApi.me();
     if (session.username !== username) setSession(session.username);
     syncProfile(session);
+    await syncServerRecords(session.username);
   } catch (e) {
     if (e instanceof ApiError && (e.status === 401 || e.status === 403)) setSession(null);
   }

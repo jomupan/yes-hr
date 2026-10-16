@@ -100,7 +100,7 @@ export function SelfieCapture({
     const video = videoRef.current;
     if (!video || !video.videoWidth) return;
     const canvas = document.createElement("canvas");
-    const maxW = 640;
+    const maxW = 480; // small enough to store, still clearly shows the face
     const scale = Math.min(1, maxW / video.videoWidth);
     canvas.width = Math.round(video.videoWidth * scale);
     canvas.height = Math.round(video.videoHeight * scale);
@@ -110,7 +110,7 @@ export function SelfieCapture({
     ctx.translate(canvas.width, 0);
     ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    setCaptured(canvas.toDataURL("image/jpeg", 0.8));
+    setCaptured(canvas.toDataURL("image/jpeg", 0.75));
     stopStream();
   };
 

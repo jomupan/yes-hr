@@ -1,16 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Calendar } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { Card, EmptyState, Avatar } from "@/components/admin/ui";
-import {
-  getEmployeeAttendance,
-  employeeIdOf,
-  departmentOf,
-  companyOf,
-  type AdminAttendanceRow,
-} from "@/lib/admin-store";
-import { getUser } from "@/lib/hr-store";
+import type { AdminAttendanceRow } from "@/lib/admin-store";
+import type { UserProfile } from "@/lib/hr-types";
+import { fetchEmployeeAttendance } from "@/lib/api-attendance";
 import { fmtDate, fmtTime } from "@/lib/hr-store";
 import { AttendanceStatusBadge } from "./AdminAttendance";
 
@@ -23,14 +18,30 @@ export function AdminAttendanceEmployee() {
   });
   const [lightbox, setLightbox] = useState<string | null>(null);
 
-  const profile = useMemo(
-    () => (username ? getUser(username) : null),
-    [username],
-  );
-  const allRecords = useMemo(
-    () => (username ? getEmployeeAttendance(username) : []),
-    [username],
-  );
+  // Loaded from the server so records from every device are included.
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [allRecords, setAllRecords] = useState<AdminAttendanceRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!username) return;
+    let cancelled = false;
+    setLoading(true);
+    fetchEmployeeAttendance(username)
+      .then((res) => {
+        if (cancelled) return;
+        setProfile(res.profile);
+        setAllRecords(res.rows);
+      })
+      .catch(() => {
+        if (!cancelled) setProfile(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [username]);
 
   const filtered = allRecords.filter((r) => {
     if (range.from && r.record.date < range.from) return false;
@@ -53,7 +64,11 @@ export function AdminAttendanceEmployee() {
         <ArrowLeft className="w-4 h-4" /> Back to Attendance
       </button>
 
-      {!profile ? (
+      {loading ? (
+        <Card className="p-6">
+          <EmptyState>Loading attendance…</EmptyState>
+        </Card>
+      ) : !profile ? (
         <Card className="p-6">
           <EmptyState>Employee not found.</EmptyState>
         </Card>
@@ -67,8 +82,8 @@ export function AdminAttendanceEmployee() {
                 {profile.fullName}
               </h2>
               <div className="text-slate-400 text-sm mt-0.5">
-                {employeeIdOf(profile)} · {departmentOf(profile)} ·{" "}
-                {companyOf(profile)}
+                {profile.employeeId} · {profile.department} ·{" "}
+                {profile.company}
               </div>
             </div>
           </div>

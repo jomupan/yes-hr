@@ -20,11 +20,8 @@ import {
   AdminSelect,
   StatCard,
 } from "@/components/admin/ui";
-import {
-  getAttendanceForDate,
-  getAttendanceSummary,
-  type AdminAttendanceRow,
-} from "@/lib/admin-store";
+import type { AdminAttendanceRow, AttendanceSummary } from "@/lib/admin-store";
+import { fetchAttendanceForDate } from "@/lib/api-attendance";
 import { useNavigate } from "react-router-dom";
 import { fmtDate, fmtTime, todayISO } from "@/lib/hr-store";
 import { AttendanceDetailsModal } from "@/components/admin/AttendanceDetailsModal";
@@ -37,9 +34,18 @@ type StatusFilter =
   | "Currently Working"
   | "Not Clocked In";
 
-/* localStorage keys that, when changed in another tab, mean attendance or the
-   employee roster has been updated and the admin view must re-read fresh data. */
-const WATCH_KEYS = ["hr:index", "hr:user:", "hr:attendance:"];
+const EMPTY_SUMMARY: AttendanceSummary = {
+  totalActive: 0,
+  present: 0,
+  late: 0,
+  notClockedIn: 0,
+  clockedOut: 0,
+  currentlyWorking: 0,
+};
+
+/* Re-check the server this often while the page is open, so new clock-ins
+   from staff phones appear without pressing Refresh. */
+const AUTO_REFRESH_MS = 60_000;
 
 export function AdminAttendance() {
   const navigate = useNavigate();
@@ -48,7 +54,8 @@ export function AdminAttendance() {
   const [deptFilter, setDeptFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [selected, setSelected] = useState<AdminAttendanceRow | null>(null);
-  const [tick, setTick] = useState(0);
+  const [rows, setRows] = useState<AdminAttendanceRow[]>([]);
+  const [summary, setSummary] = useState<AttendanceSummary>(EMPTY_SUMMARY);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
@@ -64,58 +71,43 @@ export function AdminAttendance() {
   // so stale data can never overwrite fresh data.
   const reqIdRef = useRef(0);
 
-  // Single shared fetch used by initial load, Refresh, and cross-tab sync.
-  // It bumps `tick` so the memoized summary/rows recompute from a FRESH
-  // localStorage read (getAttendanceForDate reads synchronously every call).
-  const fetchAttendance = useCallback(() => {
+  // Single shared fetch used by initial load, Refresh, date changes and the
+  // auto-refresh. Reads from the server, so clock-ins from any device show.
+  const fetchAttendance = useCallback(async () => {
     const myId = ++reqIdRef.current;
     setRefreshing(true);
     setRefreshError(false);
-    // Defer to next tick so the spinner can render before the (synchronous)
-    // store read completes, giving a visible loading state.
-    setTimeout(() => {
+    try {
+      const res = await fetchAttendanceForDate(date);
       // A newer request started — discard this stale result.
       if (myId !== reqIdRef.current) return;
-      try {
-        setTick((t) => t + 1);
-        setLastUpdated(
-          new Date().toLocaleTimeString("en-GB", {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-        );
-      } catch {
-        setRefreshError(true);
-      } finally {
-        if (myId === reqIdRef.current) setRefreshing(false);
-      }
-    }, 200);
-  }, []);
+      setRows(res.rows);
+      setSummary(res.summary);
+      setLastUpdated(
+        new Date().toLocaleTimeString("en-GB", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      );
+    } catch {
+      if (myId === reqIdRef.current) setRefreshError(true);
+    } finally {
+      if (myId === reqIdRef.current) setRefreshing(false);
+    }
+  }, [date]);
 
-  // Initial load.
+  // Load on open and whenever the date changes.
   useEffect(() => {
-    fetchAttendance();
+    void fetchAttendance();
   }, [fetchAttendance]);
 
-  // Cross-tab / cross-window sync: when staff clocks in/out in another tab of
-  // the same origin, localStorage fires a `storage` event here. Re-read fresh
-  // data automatically so the admin view never stays stale between manual
-  // refreshes. (Different origins — e.g. preview vs published — have isolated
-  // localStorage and cannot share data without a backend; manual Refresh still
-  // re-reads the admin origin's own store.)
+  // Keep the view fresh while the page is open and visible.
   useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (!e.key) return;
-      if (WATCH_KEYS.some((p) => e.key === p || e.key.startsWith(p))) {
-        fetchAttendance();
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    const id = window.setInterval(() => {
+      if (document.visibilityState === "visible") void fetchAttendance();
+    }, AUTO_REFRESH_MS);
+    return () => window.clearInterval(id);
   }, [fetchAttendance]);
-
-  const summary = useMemo(() => getAttendanceSummary(date), [date, tick]);
-  const rows = useMemo(() => getAttendanceForDate(date), [date, tick]);
 
   const departments = useMemo(() => {
     const set = new Set(rows.map((r) => r.department).filter(Boolean));
@@ -149,7 +141,11 @@ export function AdminAttendance() {
     ];
     const lines = filtered.map((r) => {
       const hours =
-        r.hours == null ? "In Progress" : `${r.hours.toFixed(1)} hrs`;
+        !r.record.clockIn
+          ? "-"
+          : r.hours == null
+            ? "In Progress"
+            : `${r.hours.toFixed(1)} hrs`;
       return [
         r.fullName,
         r.employeeId,
@@ -402,7 +398,9 @@ export function AdminAttendance() {
                       />
                     </td>
                     <td className="px-4 py-3 font-mono-hr text-slate-300">
-                      {r.hours == null ? (
+                      {!r.record.clockIn ? (
+                        <span className="text-slate-600">—</span>
+                      ) : r.hours == null ? (
                         <span className="text-amber-300">In Progress</span>
                       ) : (
                         `${r.hours.toFixed(1)} hrs`

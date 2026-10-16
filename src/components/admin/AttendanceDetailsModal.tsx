@@ -72,9 +72,11 @@ export function AttendanceDetailsModal({
               <DetailBox
                 label="Working Hours"
                 value={
-                  row.hours == null
-                    ? "In Progress"
-                    : `${row.hours.toFixed(1)} hrs`
+                  !rec.clockIn
+                    ? "-"
+                    : row.hours == null
+                      ? "In Progress"
+                      : `${row.hours.toFixed(1)} hrs`
                 }
               />
               <div>

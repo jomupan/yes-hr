@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { UseHrSession } from "@/hooks/use-hr-session";
-import { fmtDate, fmtTime, nowISO, todayISO, workHours } from "@/lib/hr-store";
+import { fmtDate, fmtTime, todayISO, workHours } from "@/lib/hr-store";
+import { clockIn, clockOut, fetchMyAttendance } from "@/lib/api-attendance";
 import { SelfieCapture } from "./SelfieCapture";
 
 interface Props {
@@ -89,7 +90,22 @@ export function Attendance({ hr }: Props) {
   const [pendingSelfie, setPendingSelfie] = useState<string | null>(null);
   const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState("");
+  const [saving, setSaving] = useState(false);
   const timerRef = useRef<number | null>(null);
+
+  // Load the latest records from the server (e.g. a clock-in made on
+  // another device) whenever the Attendance screen opens.
+  const updateAttendance = hr.updateAttendance;
+  const refreshFromServer = async () => {
+    const records = await fetchMyAttendance();
+    updateAttendance({ records });
+  };
+  useEffect(() => {
+    refreshFromServer().catch(() => {
+      /* offline: keep what's on screen */
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const tick = () => setClock(new Date().toLocaleTimeString("en-GB"));
@@ -145,59 +161,34 @@ export function Attendance({ hr }: Props) {
     }
   };
 
-  const finalizeClockIn = async (selfie: string) => {
+  // Send the clock-in/out to the server (location + selfie), then reload.
+  const save = async (kind: "in" | "out", selfie: string) => {
     const result = await getCurrentLocation();
     if (!result.coords) {
       setLocError(result.error || "Unable to retrieve your location.");
       return;
     }
-    const location = formatLocation(result.coords);
-    const updated = {
-      records: [
-        ...session.attendance.records,
-        {
-          date: todayISO(),
-          clockIn: nowISO(),
-          clockOut: null,
-          location,
-          clockOutLocation: "",
-          selfie: "Selfie captured",
-          clockInSelfie: selfie,
-        },
-      ],
-    };
-    hr.updateAttendance(updated);
-    setSuccessMsg("Clocked in successfully.");
-    setSelfiePreview(null);
-    setPendingSelfie(null);
-    setTimeout(() => setSuccessMsg(""), 4000);
-  };
-
-  const finalizeClockOut = async (selfie: string) => {
-    const result = await getCurrentLocation();
-    if (!result.coords) {
-      setLocError(result.error || "Unable to retrieve your location.");
-      return;
+    setSaving(true);
+    setLocError("");
+    try {
+      const location = formatLocation(result.coords);
+      if (kind === "in") await clockIn(location, selfie);
+      else await clockOut(location, selfie);
+      await refreshFromServer();
+      setSuccessMsg(kind === "in" ? "Clocked in successfully." : "Clocked out successfully.");
+      setTimeout(() => setSuccessMsg(""), 4000);
+    } catch (e) {
+      setLocError(e instanceof Error ? e.message : "Couldn't save. Please try again.");
+      // Already clocked in/out on another device: show the real state.
+      refreshFromServer().catch(() => undefined);
+    } finally {
+      setSaving(false);
+      setSelfiePreview(null);
+      setPendingSelfie(null);
     }
-    const clockOutLocation = formatLocation(result.coords);
-    const updated = {
-      records: session.attendance.records.map((r) =>
-        r.date === todayISO()
-          ? {
-              ...r,
-              clockOut: nowISO(),
-              clockOutLocation,
-              clockOutSelfie: selfie,
-            }
-          : r,
-      ),
-    };
-    hr.updateAttendance(updated);
-    setSuccessMsg("Clocked out successfully.");
-    setSelfiePreview(null);
-    setPendingSelfie(null);
-    setTimeout(() => setSuccessMsg(""), 4000);
   };
+  const finalizeClockIn = (selfie: string) => save("in", selfie);
+  const finalizeClockOut = (selfie: string) => save("out", selfie);
 
   return (
     <>
@@ -240,19 +231,21 @@ export function Attendance({ hr }: Props) {
             <div className="flex gap-2 flex-wrap justify-end">
               <button
                 onClick={startClockIn}
-                disabled={!!today || locating}
+                disabled={!!today || locating || saving}
                 className="inline-flex items-center justify-center px-4 py-2.5 rounded-lg border border-border bg-transparent text-[hsl(var(--ink))] text-sm font-semibold hover:bg-[hsl(var(--paper-2))] transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
               >
                 {locating
                   ? "Getting location..."
-                  : "Clock In (+selfie & location)"}
+                  : saving
+                    ? "Saving…"
+                    : "Clock In (+selfie & location)"}
               </button>
               <button
                 onClick={startClockOut}
-                disabled={!today || !!today.clockOut || locating}
+                disabled={!today || !!today.clockOut || locating || saving}
                 className="inline-flex items-center justify-center px-4 py-2.5 rounded-lg border border-[hsl(var(--ink))] bg-[hsl(var(--ink))] text-white text-sm font-semibold hover:bg-[hsl(var(--blue-dark))] hover:border-[hsl(var(--blue-dark))] transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
               >
-                {locating ? "Getting location..." : "Clock Out"}
+                {locating ? "Getting location..." : saving ? "Saving…" : "Clock Out"}
               </button>
             </div>
             {locError && (

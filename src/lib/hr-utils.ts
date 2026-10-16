@@ -2,8 +2,13 @@
    hr-store.ts so that file stays focused on storage + auth. Re-exported from
    hr-store.ts for backward compatibility with components importing from there. */
 
+/** Today's date (YYYY-MM-DD) on this device's clock, e.g. Malaysia time.
+ *  (toISOString() would give the UTC date, which is still "yesterday" in
+ *  Malaysia before 8 a.m. and would not match the server's records.) */
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
 export function nowISO(): string {

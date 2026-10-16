@@ -30,7 +30,7 @@ import {
 import { notifyAdminStaffRegistered } from "@/lib/notification-store";
 import { isAccountActive } from "@/lib/account-status";
 import { authApi } from "@/lib/api";
-import { hasServerSession, startServerSession } from "@/lib/api-session";
+import { hasServerSession, startServerSession, syncServerRecords } from "@/lib/api-session";
 
 export type View = "landing" | "login" | "register" | "dopegate" | "app";
 
@@ -174,6 +174,7 @@ export function useHrSession(): UseHrSession {
         // The backend checks the password, account status and role.
         const res = await authApi.login(identifier.trim(), password);
         startServerSession(res);
+        await syncServerRecords(res.session.username);
       } catch (e) {
         setAuthError(e instanceof Error ? e.message : "Unable to log in.");
         return null;
@@ -234,6 +235,7 @@ export function useHrSession(): UseHrSession {
           companyId,
         });
         startServerSession(res);
+        await syncServerRecords(res.session.username);
         // Keep the admin bell in this browser in step until notifications
         // move to the API too.
         notifyAdminStaffRegistered(cleanName, res.session.username);
