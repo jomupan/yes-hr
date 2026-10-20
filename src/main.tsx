@@ -1,7 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
-import { installIdleLogout, verifyStoredSession } from "./lib/api-session";
+import { installAccountWatch, installIdleLogout, verifyStoredSession } from "./lib/api-session";
 
 // Log out sessions left idle (without "Remember me") for 30+ minutes.
 installIdleLogout();
@@ -9,6 +9,8 @@ installIdleLogout();
 // Check any saved login with the backend before the first render, so an
 // expired token or a deactivated account goes straight to the login page.
 verifyStoredSession().finally(() => {
+  // If another tab logs in as someone else, reload this one to match.
+  installAccountWatch();
   createRoot(document.getElementById("root")!).render(<App />);
 });
 

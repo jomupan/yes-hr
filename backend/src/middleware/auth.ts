@@ -54,6 +54,13 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     if (user.account_status === "inactive") {
       throw forbidden("This account is no longer active. Please contact HR for assistance.", "ACCOUNT_INACTIVE");
     }
+    // The app sends the username its screen belongs to. If that's not the
+    // account this token is for (another tab logged in as someone else),
+    // refuse, so nothing is saved to the wrong person.
+    const expected = req.headers["x-hr-user"];
+    if (typeof expected === "string" && expected && expected !== user.username) {
+      throw unauthorized("You are now logged in as another account. Reloading…", "ACCOUNT_SWITCHED");
+    }
     req.user = user;
     next();
   } catch (e) {

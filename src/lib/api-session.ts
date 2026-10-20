@@ -34,6 +34,36 @@ export function startServerSession(res: AuthResponse, remember = false): void {
   syncProfile(res.session);
   setSession(res.session.username);
   markActive();
+  pageAccount = currentAccount();
+}
+
+/* ---------- one account per device ----------
+   All tabs (and an installed app sharing the browser) use the same saved
+   login. If another tab logs in as someone else, this tab reloads so it
+   never shows one person's name with another person's records. */
+let pageAccount = "";
+const currentAccount = () => `${getSessionUsername() || ""}|${getToken() || ""}`;
+
+export function installAccountWatch(): void {
+  pageAccount = currentAccount();
+  const check = () => {
+    const now = currentAccount();
+    if (now === pageAccount) return;
+    // Logged out here or elsewhere: nothing to show, go to the login page.
+    if (!getSessionUsername()) {
+      pageAccount = now;
+      if (!window.location.pathname.startsWith("/login")) window.location.replace("/login");
+      return;
+    }
+    window.location.reload();
+  };
+  window.addEventListener("storage", (e) => {
+    if (e.key === null || e.key === "hr:token" || e.key === "hr:session") check();
+  });
+  window.addEventListener("focus", check);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") check();
+  });
 }
 
 /* ---------- automatic logout after inactivity ----------

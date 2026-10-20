@@ -28,6 +28,33 @@ export function getToken(): string | null {
   return store("session")?.getItem(TOKEN_KEY) ?? store("local")?.getItem(TOKEN_KEY) ?? null;
 }
 
+/** Username this page is showing (the app's session record). */
+function sessionUsername(): string {
+  try {
+    return (JSON.parse(store("local")?.getItem("hr:session") || "{}") as { username?: string }).username || "";
+  } catch {
+    return "";
+  }
+}
+
+/** Headers for an authenticated request. X-HR-User tells the server which
+ *  account this screen belongs to, so if another tab has since logged in as
+ *  someone else, the server refuses instead of saving to the wrong person. */
+export function authHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const user = sessionUsername();
+  if (token && user) headers["X-HR-User"] = user;
+  return headers;
+}
+
+/** The account changed in another tab: reload so this tab shows the
+ *  account that is really logged in. */
+export function handleAccountSwitched(code?: string): void {
+  if (code === "ACCOUNT_SWITCHED") window.location.reload();
+}
+
 /** True when the current login was made with "Remember me". */
 export function isRemembered(): boolean {
   return !!store("local")?.getItem(TOKEN_KEY);
@@ -60,12 +87,12 @@ const OFFLINE_MESSAGE =
 /** JSON request to the backend. Throws ApiError with the server's message. */
 export async function api<T = Record<string, unknown>>(
   path: string,
-  options: { method?: string; body?: unknown; auth?: boolean } = {},
+  options: { method?: string; body?: unknown; auth?: boolean; checkAccount?: boolean } = {},
 ): Promise<T> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = options.auth !== false ? authHeaders() : {};
+  // /auth/me is how a page finds out who is really logged in, so it skips the check.
+  if (options.checkAccount === false) delete headers["X-HR-User"];
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
-  const token = getToken();
-  if (options.auth !== false && token) headers.Authorization = `Bearer ${token}`;
 
   let res: Response;
   try {
@@ -85,6 +112,7 @@ export async function api<T = Record<string, unknown>>(
     throw new ApiError(res.ok ? "Unexpected server response." : OFFLINE_MESSAGE, res.status, "BAD_RESPONSE");
   }
   if (!res.ok || data.ok === false) {
+    handleAccountSwitched(data.code);
     throw new ApiError(data.error || "Something went wrong.", res.status, data.code);
   }
   return data as T;
@@ -130,7 +158,7 @@ export const authApi = {
     departmentId: string;
     companyId: string;
   }) => api<AuthResponse>("/auth/register", { body, auth: false }),
-  me: () => api<{ session: ApiSessionBundle }>("/auth/me"),
+  me: () => api<{ session: ApiSessionBundle }>("/auth/me", { checkAccount: false }),
   forgotPassword: (identifier: string) =>
     api<{ message: string; devToken?: string; resetUrl?: string }>("/auth/forgot-password", {
       body: { identifier },

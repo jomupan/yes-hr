@@ -77,6 +77,15 @@ describe("auth", () => {
     expect(await life(true)).toBe(30 * 24 * 3600);
   });
 
+  it("refuses a request when the screen belongs to a different account", async () => {
+    const t = (await request(app).post("/api/auth/login").send({ identifier: "admin", password: "admin123" })).body.token;
+    const ok = await request(app).get("/api/me/attendance").set(auth(t)).set("X-HR-User", "admin");
+    expect(ok.status).toBe(200);
+    const bad = await request(app).get("/api/me/attendance").set(auth(t)).set("X-HR-User", "someone.else");
+    expect(bad.status).toBe(401);
+    expect(bad.body.code).toBe("ACCOUNT_SWITCHED");
+  });
+
   it("rejects bad credentials with one generic message", async () => {
     const a = await request(app).post("/api/auth/login").send({ identifier: "admin", password: "nope" });
     const b = await request(app).post("/api/auth/login").send({ identifier: "ghost", password: "nope" });

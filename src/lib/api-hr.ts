@@ -19,7 +19,7 @@ import type {
   LeaveType,
 } from "./hr-types";
 import type { AdminLeaveRow } from "./admin-store";
-import { API_BASE, ApiError, api, fileUrl, getToken } from "./api";
+import { API_BASE, ApiError, api, authHeaders, fileUrl, handleAccountSwitched } from "./api";
 import { setJSON } from "./hr-store";
 
 /* ---------- shapes the server sends ---------- */
@@ -76,18 +76,18 @@ function dataUrlToBlob(dataUrl: string, fallbackType: string): Blob {
 
 /** Multipart POST (file uploads). Same error handling as api(). */
 async function postForm<T>(path: string, form: FormData): Promise<T> {
-  const token = getToken();
   let res: Response;
   try {
     res = await fetch(`${API_BASE}${path}`, {
       method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      headers: authHeaders(),
       body: form,
     });
   } catch {
     throw new ApiError("Can't reach the server. Please check your connection and try again.", 0, "OFFLINE");
   }
   const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.ok === false) handleAccountSwitched(data.code);
   if (!res.ok || data.ok === false) throw new ApiError(data.error || "Something went wrong.", res.status, data.code);
   return data as T;
 }
