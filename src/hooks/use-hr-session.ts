@@ -213,10 +213,6 @@ export function useHrSession(): UseHrSession {
         setRegError("Please select your company.");
         return null;
       }
-      if (!departmentId) {
-        setRegError("Please select your department.");
-        return null;
-      }
       const pwCheck = validatePassword(password);
       if (!pwCheck.ok) {
         setRegError(pwCheck.errors[0]);

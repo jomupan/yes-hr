@@ -306,7 +306,7 @@ function RegisterCard({ hr }: Props) {
       setLocalError("Please select your company.");
       return;
     }
-    if (!departmentId) {
+    if (departments.length > 0 && !departmentId) {
       setLocalError("Please select your department.");
       return;
     }
@@ -447,9 +447,8 @@ function RegisterCard({ hr }: Props) {
               Select a company first.
             </div>
           ) : departments.length === 0 ? (
-            <div className="text-xs text-[hsl(var(--red))] bg-[hsl(var(--paper))] border border-border rounded-lg px-3 py-2.5">
-              No departments are currently available for this company. Please
-              contact HR.
+            <div className="text-xs text-muted-foreground bg-[hsl(var(--paper))] border border-border rounded-lg px-3 py-2.5">
+              No departments needed for this company.
             </div>
           ) : (
             <select

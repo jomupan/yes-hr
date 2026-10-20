@@ -67,7 +67,7 @@ authRouter.post(
         role: z.string().trim().max(120).optional().default("Staff"),
         password: z.string(),
         email: z.union([z.literal(""), z.string().trim().email("A valid email is required.").max(190)]).optional(),
-        departmentId: z.string().min(1, "Please select your department."),
+        departmentId: z.string().optional().default(''),
         companyId: z.string().min(1, "Please select your company."),
       }),
       req.body,
@@ -81,11 +81,16 @@ authRouter.post(
     const company = await db("companies").where({ id: body.companyId }).first();
     if (!company) throw badRequest("Please select your company.");
     if (!company.active) throw badRequest("The selected company is no longer available.");
-    const dept = await db("departments").where({ id: body.departmentId }).first();
-    if (!dept) throw badRequest("Please select your department.");
-    if (!dept.active) throw badRequest("The selected department is no longer available.");
-    if (dept.company_id !== company.id)
-      throw badRequest("The selected department does not belong to the selected company.");
+    const hasDepartments = await db("departments").where({ company_id: company.id, active: true }).first();
+    let dept: { id: string } | undefined;
+    if (hasDepartments) {
+      dept = await db("departments").where({ id: body.departmentId }).first();
+      if (!body.departmentId || dept) throw badRequest("Please select your department.");
+      const d = dept as { id: string; active: boolean; company_id: string };
+      if (!d.active) throw badRequest("The selected department is no longer available.");
+      if (d.company_id !== company.id)
+        throw badRequest("The selected department does not belong to the selected company.") 
+    }
 
     if (await db("users").where({ username }).first()) throw conflict("Username already exists. Please log in.");
     // Email is optional on the form; default matches the frontend.
@@ -103,7 +108,7 @@ authRouter.post(
           password: body.password,
           authRole: "staff",
           companyId: company.id,
-          departmentId: dept.id,
+          departmentId: dept?.id ?? null,
         },
         trx,
       );
