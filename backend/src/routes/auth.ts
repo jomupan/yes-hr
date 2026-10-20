@@ -81,15 +81,15 @@ authRouter.post(
     const company = await db("companies").where({ id: body.companyId }).first();
     if (!company) throw badRequest("Please select your company.");
     if (!company.active) throw badRequest("The selected company is no longer available.");
+    let departmentId: string | null = null;
     const hasDepartments = await db("departments").where({ company_id: company.id, active: true }).first();
-    let dept: { id: string } | undefined;
     if (hasDepartments) {
-      dept = await db("departments").where({ id: body.departmentId }).first();
-      if (!body.departmentId || dept) throw badRequest("Please select your department.");
-      const d = dept as { id: string; active: boolean; company_id: string };
-      if (!d.active) throw badRequest("The selected department is no longer available.");
-      if (d.company_id !== company.id)
-        throw badRequest("The selected department does not belong to the selected company.") 
+      const dept = await db("departments").where({ id: body.departmentId || "" }).first();
+      if (!dept) throw badRequest("Please select your department.");
+      if (!dept.active) throw  badRequest("The selected department is no longer available.");
+      if (dept.company_id !== company.id)
+        throw badRequest("Theselected department does not belong to the selected company.");
+      departmentId = dept.id;
     }
 
     if (await db("users").where({ username }).first()) throw conflict("Username already exists. Please log in.");
@@ -108,7 +108,7 @@ authRouter.post(
           password: body.password,
           authRole: "staff",
           companyId: company.id,
-          departmentId: dept?.id ?? null,
+          departmentId,
         },
         trx,
       );
