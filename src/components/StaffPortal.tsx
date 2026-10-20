@@ -12,6 +12,7 @@ import { Claim } from "@/components/hr/Claim";
 import { Evaluation } from "@/components/hr/Evaluation";
 import { CalendarView } from "@/components/hr/Calendar";
 import { Notifications } from "@/components/hr/Notifications";
+import { MyProfile } from "@/components/hr/MyProfile";
 
 /**
  * The authenticated Staff Portal UI. Reused by the `/` (Index) route and the
@@ -61,6 +62,8 @@ export function StaffPortal({ initialModule = "attendance" }: StaffPortalProps) 
         return <DopeTest hr={hr} />;
       case "notifications":
         return <Notifications hr={hr} onNavigate={handleSelect} />;
+      case "profile":
+        return <MyProfile hr={hr} />;
       case "admin":
         return <Dashboard hr={hr} onNavigate={handleSelect} />;
       default:

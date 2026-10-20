@@ -168,6 +168,7 @@ export type ModuleId =
   | "calendar"
   | "dopetest"
   | "notifications"
+  | "profile"
   | "admin";
 
 export interface DopeStatus {

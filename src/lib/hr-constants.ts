@@ -68,6 +68,12 @@ export const MODULES: ModuleDef[] = [
     num: "8",
     blurb: "Your HR notifications & updates.",
   },
+    {
+    id: "profile",
+    label: "My Profile",
+    num: "9",
+    blurb: "Your details and password.",
+  },
   {
     id: "admin",
     label: "Admin Panel",

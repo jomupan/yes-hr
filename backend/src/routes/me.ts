@@ -39,7 +39,28 @@ meRouter.get(
 );
 
 /* ───────────── Dope personality test ───────────── */
-
+/* Staff update their own name, email and position. Company and department
+   stay admin-only. */
+meRouter.patch(
+  "/profile",
+  asyncHandler(async (req, res) => {
+    const body = parse(
+      z.object({
+        fullName: z.string().trim().min(1, "Please enter your full name.").max(160),
+        email: z.string().trim().email("Please enter a valid email.").max(190),
+        role: z.string().trim().max(120).optional().default(""),
+      }),
+      req.body,
+    );
+    const user = req.user!;
+    const email = body.email.toLowerCase();
+    if (await db("users").whereRaw("lower(email) = ?", [email]).whereNot({ id: user.id }).first())
+      throw conflict("That email is already used by another account.");
+    const patch = { full_name: body.fullName, email, job_title: body.role || "Staff", updated_at: nowISO() };
+    await db("users").where({ id: user.id }).update(patch);
+    res.json({ ok: true, profile: await toProfile({ ...user, ...patch } as UserRow) });
+  }),
+);
 meRouter.get(
   "/dope",
   asyncHandler(async (req, res) => {
