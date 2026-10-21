@@ -46,6 +46,7 @@ export function AdminAdmins() {
   const session = useAdminSession();
   const [tick, setTick] = useState(0);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  const [menuPos, setMenupos] = useState<{ top?: Number; bottom?: Number; right: Number }>({ right: 0});
   const [modal, setModal] = useState<ModalKind>({ kind: "none" });
   const [actionError, setActionError] = useState("");
 
@@ -233,11 +234,17 @@ export function AdminAdmins() {
                     </td>
                     <td className="px-4 py-3 relative">
                       <button
-                        onClick={() =>
-                          setMenuOpen(
-                            menuOpen === row.username ? null : row.username,
-                          )
-                        }
+                        onClick={(ev) => {
+                          const r = ev.currentTarget.getBoundingClientRect();
+                          const roomBelow = window.innerHeight - r.bottom > 240;
+                          setMenupos(
+                            roomBelow
+                              ? { top: r.bottom + 4, right: window.innerWidth - r.right }
+                              : { bottom: window.innerHeight - r.top + 4, right: window.innerWidth - r.right },
+                          );
+                          setMenuOpen(menuOpen === row.username ? null : row.username);
+                        }}
+
                         className="text-slate-400 hover:text-white p-1 rounded hover:bg-white/5"
                       >
                         <MoreVertical className="w-4 h-4" />
@@ -248,7 +255,7 @@ export function AdminAdmins() {
                             className="fixed inset-0 z-40"
                             onClick={() => setMenuOpen(null)}
                           />
-                          <div className="absolute right-0 top-9 z-50 w-52 bg-[#111726] border border-white/10 rounded-lg shadow-xl py-1">
+                          <div style={menuPos} className="fixed z-50 w-52 bg-[#111726] border border-white/10 rounded-lg shadow-xl py-1">
                             <MenuItem
                               icon={<Eye className="w-3.5 h-3.5" />}
                               label="View Profile"

@@ -282,11 +282,16 @@ export function AdminEmployees() {
                       </td>
                       <td className="px-4 py-3 relative">
                         <button
-                          onClick={() =>
-                            setMenuOpen(
-                              menuOpen === e.username ? null : e.username,
-                            )
-                          }
+                          onClick={(ev) => {
+                            const r = ev.currentTarget.getBoundingClientRect();
+                            const roomBelow = window.innerHeight - r.bottom > 240;
+                            setMenuPos(
+                              roomBelow
+                                ? { top: r.bottom + 4, right: window.innerWidth - r.right }
+                                : { bottom: window.innerHeight - r.top + 4, right: window.innerWidth - r.right },
+                            );
+                            setMenuOpen(menuOpen === e.username ? null : e.username);
+                          }}
                           className="text-slate-400 hover:text-white p-1 rounded hover:bg-white/5"
                         >
                           <MoreVertical className="w-4 h-4" />
@@ -297,7 +302,7 @@ export function AdminEmployees() {
                               className="fixed inset-0 z-40"
                               onClick={() => setMenuOpen(null)}
                             />
-                            <div className="absolute right-0 top-9 z-50 w-48 bg-[#111726] border border-white/10 rounded-lg shadow-xl py-1">
+                            <div style={menuPos} className="fixed z-50 w-48 bg-[#111726] border border-white/10 rounded-lg shadow-xl py-1">
                               <button
                                 onClick={() => {
                                   setSelected(e);
