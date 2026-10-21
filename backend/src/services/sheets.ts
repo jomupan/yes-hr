@@ -23,7 +23,7 @@ export function sendAttendanceToSheet(user: UserRow, row: Record<string, any>): 
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     secret: config.sheetsSecret,
-                    recordid: rec.id,
+                    recordId: rec.id,
                     date: rec.date,
                     employeeId: profile.employeeId || "",
                     fullName: profile.fullName,
@@ -39,7 +39,7 @@ export function sendAttendanceToSheet(user: UserRow, row: Record<string, any>): 
                 }),
                 signal: AbortSignal.timeout(15000),
             });
-            if (!res.ok) console.error('Google Sheet update failed: HTTP ${res.status}');
+            if (!res.ok) console.error(`Google Sheet update failed: HTTP ${res.status}`);
         } catch (e) {
             console.error("Google Sheet update failed:", e instanceof Error ? e.message : e);
         }
