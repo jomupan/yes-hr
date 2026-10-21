@@ -131,7 +131,7 @@ export function CreateAdminModal({
   onSubmit,
 }: {
   onClose: () => void;
-  onSubmit: (input: CreateAdminInput) => boolean;
+  onSubmit: (input: CreateAdminInput) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
@@ -141,7 +141,7 @@ export function CreateAdminModal({
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
 
-  const submit = () => {
+  const submit = async () => {
     setError("");
     if (!fullName.trim() || !username.trim()) {
       setError("Full name and username are required.");
@@ -159,8 +159,9 @@ export function CreateAdminModal({
       setError("Passwords do not match.");
       return;
     }
-    if (onSubmit({ fullName, username, email, password, role })) onClose();
-    else setError("That username or email already exists.");
+    const r = await onSubmit({ fullName, username, email, password, role });
+    if (r.ok) onClose();
+    else setError(r.error || "Unable to create the admin account.")
   };
 
   return (
@@ -314,14 +315,14 @@ export function ChangePasswordModal({
   row: AdminRow;
   showCurrent: boolean;
   onClose: () => void;
-  onSubmit: (current: string, next: string) => boolean;
+  onSubmit: (current: string, next: string) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
 
-  const submit = () => {
+  const submit = async () => {
     setError("");
     if (showCurrent && !current) {
       setError("Enter the current password.");
@@ -335,8 +336,9 @@ export function ChangePasswordModal({
       setError("Passwords do not match.");
       return;
     }
-    if (onSubmit(current, next)) onClose();
-    else setError("Unable to update the password.");
+    const r = await onSubmit(current, next);
+    if (r.ok) onClose();
+    else setError(r.error || "Unable to update the password.");
   };
 
   return (

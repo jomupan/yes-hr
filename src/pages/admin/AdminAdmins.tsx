@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ShieldCheck,
   Plus,
@@ -22,8 +22,10 @@ import {
   deactivateAdmin,
   reactivateAdmin,
   getAuditLog,
+  loadAuditLog,
   type AdminMgmtResult,
 } from "@/lib/admin-accounts";
+import { useAdminDirectory } from "@/lib/api-admin";
 import { getUser, getUserIndex, fmtDate } from "@/lib/hr-store";
 import { isAccountActive } from "@/lib/account-status";
 import {
@@ -50,6 +52,11 @@ export function AdminAdmins() {
   const [modal, setModal] = useState<ModalKind>({ kind: "none" });
   const [actionError, setActionError] = useState("");
 
+  const directory = useAdminDirectory();
+  useEffect(() => {
+    loadAuditLog().then(() => setTick((t) => t + 1));
+  }, []);
+
   const adminRows = useMemo<AdminRow[]>(() => {
     return getUserIndex()
       .filter((u) => isAdminProfile(getUser(u)))
@@ -67,7 +74,7 @@ export function AdminAdmins() {
         };
       })
       .sort((a, b) => a.fullName.localeCompare(b.fullName));
-  }, [tick, session.username]);
+  }, [tick, directory, session.username]);
 
   const activeCount = activeAdminCount();
   const inactiveCount = adminRows.length - activeCount;
@@ -79,13 +86,14 @@ export function AdminAdmins() {
     setTick((t) => t + 1);
   };
 
-  const handleResult = (r: AdminMgmtResult): boolean => {
+  const handleResult = async (p: Promise<AdminMgmtResult>): Promise<AdminMgmtResult> => {
+    const r = await p;
     if (!r.ok) {
       setActionError(r.error || "Unable to complete the action.");
-      return false;
+      return r;
     }
     refresh();
-    return true;
+    return r;
   };
 
   const onMenu = (action: string, row: AdminRow) => {
@@ -265,12 +273,13 @@ export function AdminAdmins() {
                               icon={<KeyRound className="w-3.5 h-3.5" />}
                               label="Change Password"
                               onClick={() => onMenu("password", row)}
-                              disabled={row.isSelf}
+                              disabled={!row.isSelf}
                             />
                             <MenuItem
                               icon={<RotateCcw className="w-3.5 h-3.5" />}
                               label="Reset Password"
                               onClick={() => onMenu("reset", row)}
+                              disabled={row.isSelf}
                             />
                             {row.active ? (
                               <MenuItem
@@ -339,13 +348,9 @@ export function AdminAdmins() {
       {modal.kind === "create" && (
         <CreateAdminModal
           onClose={() => setModal({ kind: "none" })}
-          onSubmit={(input) => {
-            const ok = handleResult(
-              createAdminAccount(input, session.username || ""),
-            );
-            if (ok) setModal({ kind: "none" });
-            return ok;
-          }}
+          onSubmit={(input) => 
+            handleResult(createAdminAccount(input, session.username || ""))
+          }
         />
       )}
 
