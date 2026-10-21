@@ -12,7 +12,7 @@ export const attendanceRouter = Router();
    appear as "Not Clocked In"; inactive employees only appear if they have a
    record that day (same rule as the frontend admin attendance page). */
 export async function attendanceForDate(date: string) {
-  const users = await db<UserRow>("users").orderBy("full_name");
+  const users = await db<UserRow>("users").where({auth_role: "Staff"}).orderBy("full_name");
   const profiles = await toProfiles(users);
   const records = await db("attendance").where({ date });
   const byUser = new Map(records.map((r: any) => [r.user_id, r]));

@@ -252,7 +252,8 @@ describe("admin", () => {
     expect(r.status).toBe(200);
     const nurin = r.body.rows.find((x: any) => x.username === "nurin");
     expect(["Present", "Late"]).toContain(nurin.status);
-    expect(r.body.summary.totalActive).toBe(3);
+    expect(r.body.summary.totalActive).toBe(2);
+    expect(r.body.rows.some((x: any) => xContentTypeOptions.username === "admin")).toBe(false);
   });
 
   it("adds an evaluation the staff member can read", async () => {
