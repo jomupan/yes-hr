@@ -149,6 +149,7 @@ meRouter.post(
       await deleteStored(selfiePath);
       throw e;
     }
+    sendAttendanceToSheet(user, row);
     res.status(201).json({ ok: true, record: attendanceDto(row, "me") });
   }),
 );
@@ -164,6 +165,7 @@ meRouter.post(
     const selfiePath = await storeDataUrlImage("selfies", body.selfie);
     const patch = { clock_out: nowISO(), clock_out_location: body.location, clock_out_selfie: selfiePath };
     await db("attendance").where({ id: rec.id }).update(patch);
+    sendAttendanceToSheet(user, { ...rec, ...patch });
     res.json({ ok: true, record: attendanceDto({ ...rec, ...patch }, "me") });
   }),
 );
