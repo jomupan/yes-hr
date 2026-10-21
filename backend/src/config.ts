@@ -39,6 +39,9 @@ export const config = {
    *  Relative to the backend folder, like the other paths here. */
   frontendDist: path.resolve(process.env.FRONTEND_DIST || "../dist"),
   maxUploadBytes: num(process.env.MAX_UPLOAD_MB, 5) * 1024 * 1024,
+  selfieKeepHors: num(process.env.SELFIE_KEEP_HOURS, 24),
+  sheetsWebhookUrl: process.env.SHEETS_WEBHOOK_URL || "",
+  sheetSecret: process.env.SHEETS_SECRET || "",
 
   seedAdminPassword: process.env.SEED_ADMIN_PASSWORD || "admin123",
   seedStaffPassword: process.env.SEED_STAFF_PASSWORD || "staff123",

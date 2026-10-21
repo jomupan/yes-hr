@@ -18,6 +18,7 @@ import {
   payslipDto,
 } from "../services/records";
 import { newId, toProfile, UserRow } from "../services/users";
+import { sendAttendanceToSheet } from "../services/sheets";
 
 /* Staff self-service. Every query is scoped to req.user.id, so a user can
    only ever read or change their own records. Admins use these too for
