@@ -82,7 +82,7 @@ export class ApiError extends Error {
 }
 
 const OFFLINE_MESSAGE =
-  "Can't reach the server. Make sure the backend is running (npm run dev in the backend folder).";
+    "Can't reach the server right now. Please check your internet connection and try again in a minute.";
 
 /** JSON request to the backend. Throws ApiError with the server's message. */
 export async function api<T = Record<string, unknown>>(
