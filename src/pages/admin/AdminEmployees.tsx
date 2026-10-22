@@ -39,6 +39,7 @@ export function AdminEmployees() {
   const [selected, setSelected] = useState<AdminEmployee | null>(null);
   const [tick, setTick] = useState(0);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top?: number; bottom?: number; right: number }>({ right: 0 });
   const [confirm, setConfirm] = useState<{
     type: "remove" | "reactivate";
     employee: AdminEmployee;
