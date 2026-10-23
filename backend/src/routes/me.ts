@@ -209,12 +209,14 @@ meRouter.post(
         type: z.enum(LEAVE_TYPES),
         from: z.string().refine(isValidDate, "Invalid start date."),
         to: z.string().refine(isValidDate, "Invalid end date."),
-        reason: z.string().trim().min(1, "Please complete all fields.").max(2000),
+        reason: z.string().trim().max(2000).optional().default(""),
         replacementId: z.string().optional(),
       }),
       req.body,
     );
     const user = req.user!;
+    // Replacement leave needs no reason or document; other leave needs a reason.
+    if (body.type !== "Replacement" && !body.reason) throw badRequest("Please complete all fields.");
     if (body.to < body.from) throw badRequest("End date must be after the start date.");
     if (body.type === "Medical" && !req.file)
       throw badRequest("A supporting document is required for Medical leave.", "ATTACHMENT_REQUIRED");

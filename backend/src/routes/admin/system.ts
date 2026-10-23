@@ -127,6 +127,35 @@ systemRouter.get(
   }),
 );
 
+/* ───────────── Add leave days to chosen staff ─────────────
+   POST /leave-balances/add { type: Annual|Medical|Emergency, days, usernames }
+   Adds (or, with a minus number, removes) days for each chosen staff member. */
+systemRouter.post(
+  "/leave-balances/add",
+  asyncHandler(async (req, res) => {
+    const body = parse(
+      z.object({
+        type: z.enum(["Annual", "Medical", "Emergency"]),
+        days: z.coerce.number().int("Days must be a whole number.").min(-365).max(365).refine((n) => n !== 0, "Days can't be 0."),
+        usernames: z.array(z.string()).min(1, "Please tick at least one staff member."),
+      }),
+      req.body,
+    );
+    const col = ({ Annual: "leave_annual", Medical: "leave_medical", Emergency: "leave_emergency" } as const)[body.type];
+    const staff = await db<UserRow>("users").where({ auth_role: "staff" }).whereIn("username", body.usernames);
+    for (const u of staff) {
+      await db("users").where({ id: u.id }).update({ [col]: Math.max(0, u[col] + body.days), updated_at: nowISO() });
+    }
+    await logAudit({
+      action: "leave_days_added",
+      actor: req.user!.username,
+      target: body.type,
+      detail: `${body.days > 0 ? "Added" : "Removed"} ${Math.abs(body.days)} ${body.type} day(s) for ${staff.length} staff.`,
+    });
+    res.json({ ok: true, updatedStaff: staff.length });
+  }),
+);
+
 /* ───────────── Settings ───────────── */
 
 systemRouter.get(

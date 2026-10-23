@@ -40,13 +40,17 @@ export function Leave({ hr }: Props) {
   // Replacement leave given by HR. Only unexpired ones with days left can be applied for.
   const reps = session.leave.replacement || [];
   const usableReps = reps.filter((r) => !r.expired && r.balance > 0);
-  const selectedRep = type.startsWith("rep:") ? reps.find((r) => `rep:${r.id}` === type) : undefined;
+  const selectedRep = type.startsWith("rep:")
+    ? reps.find((r) => `rep:${r.id}` === type)
+    : undefined;
   const apps = [...session.leave.applications].sort(
     (a, b) => new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime(),
   );
 
   // Medical leave conventionally requires a supporting document (MC / letter).
   const attachmentRequired = type === "Medical";
+  // Replacement leave needs no reason or supporting document.
+  const isReplacement = type.startsWith("rep:");
 
   const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setFileError("");
@@ -75,7 +79,7 @@ export function Leave({ hr }: Props) {
 
   const submit = async () => {
     if (saving) return;
-    if (!from || !to || !reason.trim()) {
+    if (!from || !to || (!isReplacement && !reason.trim())) {
       setError("Please complete all fields.");
       return;
     }
@@ -94,7 +98,9 @@ export function Leave({ hr }: Props) {
         return;
       }
       if (selectedRep.expiresOn && to > selectedRep.expiresOn) {
-        setError(`${selectedRep.name} must be used by ${fmtDate(selectedRep.expiresOn)}.`);
+        setError(
+          `${selectedRep.name} must be used by ${fmtDate(selectedRep.expiresOn)}.`,
+        );
         return;
       }
     } else if (days > session.leave.balance[type as LeaveType]) {
@@ -110,12 +116,14 @@ export function Leave({ hr }: Props) {
         replacementId: selectedRep?.id,
         from,
         to,
-        reason: reason.trim(),
-        attachment,
+        reason: isReplacement ? "" : reason.trim(),
+        attachment: isReplacement ? null : attachment,
       });
       await refreshFromServer();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't submit. Please try again.");
+      setError(
+        e instanceof Error ? e.message : "Couldn't submit. Please try again.",
+      );
       return;
     } finally {
       setSaving(false);
@@ -173,7 +181,9 @@ export function Leave({ hr }: Props) {
               <div
                 className={[
                   "text-[11.5px] mt-1",
-                  r.expired ? "text-[hsl(var(--red))]" : "text-muted-foreground",
+                  r.expired
+                    ? "text-[hsl(var(--red))]"
+                    : "text-muted-foreground",
                 ].join(" ")}
               >
                 {r.expired ? "Expired" : "Use by"} {fmtDate(r.expiresOn)}
@@ -263,77 +273,83 @@ export function Leave({ hr }: Props) {
             />
           </div>
         </div>
-        <div className="mt-3">
-          <label
-            htmlFor="lv-reason"
-            className="block text-xs text-muted-foreground mb-1.5"
-          >
-            Reason
-          </label>
-          <textarea
-            id="lv-reason"
-            rows={2}
-            placeholder="State the reason for your leave application"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            className="w-full px-3 py-2.5 border border-border rounded-lg bg-[hsl(var(--paper))] text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[hsl(var(--blue-light))] focus:border-[hsl(var(--blue))]"
-          />
-        </div>
-
-        {/* Supporting document */}
-        <div className="mt-3">
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="block text-xs text-muted-foreground">
-              Supporting document
-              {attachmentRequired && (
-                <span className="text-[hsl(var(--red))] ml-1">* Required</span>
-              )}
-            </label>
-          </div>
-          {attachment ? (
-            <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border border-border bg-[hsl(var(--paper))]">
-              <div className="flex items-center gap-2 min-w-0">
-                <Paperclip
-                  className="text-[hsl(var(--blue))] flex-shrink-0"
-                  style={{ width: 16, height: 16 }}
-                />
-                <div className="min-w-0">
-                  <div className="text-sm truncate">{attachment.name}</div>
-                  <div className="font-mono-hr text-[11px] text-muted-foreground">
-                    {formatFileSize(attachment.size)}
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setAttachment(null)}
-                className="text-muted-foreground hover:text-[hsl(var(--red))] flex-shrink-0"
-                title="Remove file"
+        {!isReplacement && (
+          <>
+            <div className="mt-3">
+              <label
+                htmlFor="lv-reason"
+                className="block text-xs text-muted-foreground mb-1.5"
               >
-                <X style={{ width: 16, height: 16 }} />
-              </button>
-            </div>
-          ) : (
-            <label className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border border-dashed border-border bg-[hsl(var(--paper))] text-sm text-muted-foreground cursor-pointer hover:border-[hsl(var(--blue-light))] transition-colors">
-              <Paperclip style={{ width: 16, height: 16 }} />
-              Upload supporting document
-              <input
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
-                onChange={onFileChange}
-                className="hidden"
+                Reason
+              </label>
+              <textarea
+                id="lv-reason"
+                rows={2}
+                placeholder="State the reason for your leave application"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="w-full px-3 py-2.5 border border-border rounded-lg bg-[hsl(var(--paper))] text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[hsl(var(--blue-light))] focus:border-[hsl(var(--blue))]"
               />
-            </label>
-          )}
-          <div className="text-[11px] text-muted-foreground mt-1">
-            Accepted formats: PDF, JPG, JPEG, PNG · Maximum file size: 5 MB
-          </div>
-          {fileError && (
-            <div className="text-[hsl(var(--red))] text-xs mt-1">
-              {fileError}
             </div>
-          )}
-        </div>
+
+            {/* Supporting document */}
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs text-muted-foreground">
+                  Supporting document
+                  {attachmentRequired && (
+                    <span className="text-[hsl(var(--red))] ml-1">
+                      * Required
+                    </span>
+                  )}
+                </label>
+              </div>
+              {attachment ? (
+                <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border border-border bg-[hsl(var(--paper))]">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Paperclip
+                      className="text-[hsl(var(--blue))] flex-shrink-0"
+                      style={{ width: 16, height: 16 }}
+                    />
+                    <div className="min-w-0">
+                      <div className="text-sm truncate">{attachment.name}</div>
+                      <div className="font-mono-hr text-[11px] text-muted-foreground">
+                        {formatFileSize(attachment.size)}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAttachment(null)}
+                    className="text-muted-foreground hover:text-[hsl(var(--red))] flex-shrink-0"
+                    title="Remove file"
+                  >
+                    <X style={{ width: 16, height: 16 }} />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border border-dashed border-border bg-[hsl(var(--paper))] text-sm text-muted-foreground cursor-pointer hover:border-[hsl(var(--blue-light))] transition-colors">
+                  <Paperclip style={{ width: 16, height: 16 }} />
+                  Upload supporting document
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                    onChange={onFileChange}
+                    className="hidden"
+                  />
+                </label>
+              )}
+              <div className="text-[11px] text-muted-foreground mt-1">
+                Accepted formats: PDF, JPG, JPEG, PNG · Maximum file size: 5 MB
+              </div>
+              {fileError && (
+                <div className="text-[hsl(var(--red))] text-xs mt-1">
+                  {fileError}
+                </div>
+              )}
+            </div>
+          </>
+        )}
         {error && (
           <div className="text-[hsl(var(--red))] text-xs mt-1.5">{error}</div>
         )}

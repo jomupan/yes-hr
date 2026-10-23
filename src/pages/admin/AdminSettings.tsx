@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { Save, ShieldCheck, X } from "lucide-react";
+import { Plus, Save, ShieldCheck, X } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { Card, AdminBtn, AdminInput } from "@/components/admin/ui";
 import { useAdminSession } from "@/hooks/use-admin-session";
 import { ReplacementLeaveCard } from "@/components/admin/ReplacementLeaveCard";
 import { StaffChecklist, useActiveStaff } from "@/components/admin/StaffChecklist";
-import { fetchSettings, saveSettings, type LeaveNumbers } from "@/lib/api-settings";
+import { addLeaveDays, fetchSettings, saveSettings, type LeaveNumbers } from "@/lib/api-settings";
 
 const LEAVE_KEYS: (keyof LeaveNumbers)[] = ["Annual", "Medical", "Emergency"];
 
@@ -19,6 +19,7 @@ export function AdminSettings() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [askWho, setAskWho] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     fetchSettings()
@@ -120,9 +121,14 @@ export function AdminSettings() {
         </Card>
 
         <Card className="p-5">
-          <h3 className="text-sm font-semibold text-white mb-1">
-            Default Leave Balances
-          </h3>
+          <div className="flex items-start justify-between gap-3 mb-1">
+            <h3 className="text-sm font-semibold text-white">
+              Default Leave Balances
+            </h3>
+            <AdminBtn variant="secondary" onClick={() => setAdding(true)}>
+              <Plus className="w-4 h-4" /> Add Leave Days
+            </AdminBtn>
+          </div>
           <p className="text-[12px] text-slate-400 mb-4">
             New staff start with these days. When you change them, you can also update existing staff.
           </p>
@@ -181,6 +187,16 @@ export function AdminSettings() {
           </div>
         </Card>
       </div>
+
+      {adding && (
+        <AddLeaveDaysModal
+          onClose={() => setAdding(false)}
+          onDone={(text) => {
+            setAdding(false);
+            setMessage({ ok: true, text });
+          }}
+        />
+      )}
 
       {askWho && (
         <ApplyToStaffModal
@@ -256,6 +272,92 @@ function ApplyToStaffModal({
           </AdminBtn>
           <AdminBtn variant="primary" onClick={() => onSave([...selected])} disabled={saving}>
             {saving ? "Saving…" : `Save${selected.size ? ` & update ${selected.size} staff` : ""}`}
+          </AdminBtn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Give chosen staff extra Annual / Medical / Emergency days (e.g. +2 Annual). */
+function AddLeaveDaysModal({ onClose, onDone }: { onClose: () => void; onDone: (message: string) => void }) {
+  const staff = useActiveStaff();
+  const [type, setType] = useState<keyof LeaveNumbers>("Annual");
+  const [days, setDays] = useState("1");
+  const [chosen, setChosen] = useState<Set<string> | null>(null);
+  const selected = chosen ?? new Set(staff.map((s) => s.username));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const save = async () => {
+    if (saving) return;
+    const n = Number(days);
+    if (!Number.isInteger(n) || n === 0) return setError("Days must be a whole number (use a minus number to remove days).");
+    if (selected.size === 0) return setError("Please tick at least one staff member.");
+    setSaving(true);
+    setError("");
+    try {
+      const count = await addLeaveDays(type, n, [...selected]);
+      onDone(`${n > 0 ? "Added" : "Removed"} ${Math.abs(n)} ${type} day(s) for ${count} staff.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't save. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={onClose}>
+      <div
+        className="bg-[#111726] border border-white/10 rounded-[14px] w-full max-w-[520px] shadow-2xl max-h-[92vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ald-title"
+      >
+        <div className="flex items-center justify-between p-5 border-b border-white/10">
+          <h3 id="ald-title" className="text-base font-bold text-white">Add Leave Days</h3>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-white" aria-label="Close">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-5 space-y-4 overflow-y-auto">
+          <div>
+            <span className="block text-[11px] uppercase tracking-wide text-slate-500 mb-1.5">Leave type</span>
+            <div className="flex gap-2">
+              {LEAVE_KEYS.map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setType(k)}
+                  className={[
+                    "px-3.5 py-2 rounded-lg border text-[13px] transition-colors",
+                    type === k
+                      ? "bg-amber-500 text-black border-amber-500 font-semibold"
+                      : "border-white/10 text-slate-300 hover:bg-white/5",
+                  ].join(" ")}
+                >
+                  {k}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label htmlFor="ald-days" className="block text-[11px] uppercase tracking-wide text-slate-500 mb-1.5">
+              Days to add
+            </label>
+            <AdminInput id="ald-days" type="number" value={days} onChange={(e) => setDays(e.target.value)} />
+            <p className="text-[11.5px] text-slate-500 mt-1">Added to each staff member's current balance. Use a minus number (e.g. -1) to remove days.</p>
+          </div>
+          <StaffChecklist staff={staff} selected={selected} onChange={setChosen} title="Who gets it" />
+          {error && <p className="text-xs text-rose-300">{error}</p>}
+        </div>
+        <div className="flex justify-end gap-2 p-5 border-t border-white/10">
+          <AdminBtn variant="secondary" onClick={onClose} disabled={saving}>
+            Cancel
+          </AdminBtn>
+          <AdminBtn variant="primary" onClick={() => void save()} disabled={saving}>
+            {saving ? "Saving…" : "Save"}
           </AdminBtn>
         </div>
       </div>

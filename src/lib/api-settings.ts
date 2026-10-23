@@ -41,3 +41,10 @@ export async function updateEmployeeLeaveBalance(username: string, balance: Leav
   });
   await syncAdminDirectory();
 }
+
+/** Add (or with a minus number, remove) Annual / Medical / Emergency days for chosen staff. */
+export async function addLeaveDays(type: keyof LeaveNumbers, days: number, usernames: string[]): Promise<number> {
+  const res = await api<{ updatedStaff: number }>("/admin/leave-balances/add", { body: { type, days, usernames } });
+  await syncAdminDirectory();
+  return res.updatedStaff;
+}

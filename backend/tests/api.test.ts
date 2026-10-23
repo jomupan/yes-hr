@@ -430,3 +430,25 @@ describe("leave balance settings", () => {
     expect(b).toEqual({ Annual: 20, Medical: 10, Emergency: 5 });
   });
 });
+
+describe("add leave days to chosen staff", () => {
+  it("adds Annual days only to ticked staff, and replacement leave needs no reason", async () => {
+    const before = (await request(app).get("/api/me/leave").set(auth(staffToken))).body.balance;
+    const r = await request(app).post("/api/admin/leave-balances/add").set(auth(adminToken))
+      .send({ type: "Annual", days: 3, usernames: ["nurin"] });
+    expect(r.status).toBe(200);
+    expect(r.body.updatedStaff).toBe(1);
+    const after = (await request(app).get("/api/me/leave").set(auth(staffToken))).body.balance;
+    expect(after.Annual).toBe(before.Annual + 3);
+    expect((await request(app).post("/api/admin/leave-balances/add").set(auth(staffToken)).send({ type: "Annual", days: 1, usernames: ["nurin"] })).status).toBe(403);
+    const noReason = await request(app).post("/api/me/leave").set(auth(staffToken))
+      .field("type", "Annual").field("from", "2027-03-01").field("to", "2027-03-01");
+    expect(noReason.status).toBe(400);
+    const rep = await request(app).post("/api/admin/replacement-leaves").set(auth(adminToken))
+      .send({ name: "Replacement Leave Test", days: 1, usernames: ["nurin"] });
+    const id = rep.body.replacementLeaves.find((x: any) => x.name === "Replacement Leave Test").id;
+    const ok = await request(app).post("/api/me/leave").set(auth(staffToken))
+      .field("type", "Replacement").field("replacementId", id).field("from", "2027-03-02").field("to", "2027-03-02");
+    expect(ok.status).toBe(201);
+  });
+});
