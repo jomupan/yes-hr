@@ -401,3 +401,32 @@ describe("replacement leave", () => {
     expect(mine.applications.some((a: any) => a.typeLabel === "Replacement Leave SUKMA")).toBe(true);
   });
 });
+
+describe("leave balance settings", () => {
+  it("new defaults apply to new staff and add the difference for chosen staff", async () => {
+    const before = (await request(app).get("/api/me/leave").set(auth(staffToken))).body.balance;
+    const cur = (await request(app).get("/api/admin/settings").set(auth(adminToken))).body.settings.defaultLeave;
+    const r = await request(app).put("/api/admin/settings").set(auth(adminToken))
+      .send({ defaultLeave: { ...cur, Annual: cur.Annual + 2 }, applyTo: ["nurin", "admin"] });
+    expect(r.status).toBe(200);
+    expect(r.body.updatedStaff).toBe(1); // admins are never changed
+    const after = (await request(app).get("/api/me/leave").set(auth(staffToken))).body.balance;
+    expect(after.Annual).toBe(before.Annual + 2);
+    expect(after.Medical).toBe(before.Medical);
+    const reg = await request(app).post("/api/auth/register").send({
+      name: "New Joiner", username: "new.joiner", password: "Passw0rd!x", email: "", role: "Clerk",
+      companyId: "yes-empire-group", departmentId: (await request(app).get("/api/public/departments")).body.departments[0].id,
+    });
+    expect(reg.status).toBe(201);
+    const nj = (await request(app).get("/api/me/leave").set(auth(reg.body.token))).body.balance;
+    expect(nj.Annual).toBe(cur.Annual + 2);
+  });
+
+  it("admin edits one staff member's balance", async () => {
+    const r = await request(app).patch("/api/admin/employees/nurin").set(auth(adminToken))
+      .send({ leaveBalance: { Annual: 20, Medical: 10, Emergency: 5 } });
+    expect(r.status).toBe(200);
+    const b = (await request(app).get("/api/me/leave").set(auth(staffToken))).body.balance;
+    expect(b).toEqual({ Annual: 20, Medical: 10, Emergency: 5 });
+  });
+});

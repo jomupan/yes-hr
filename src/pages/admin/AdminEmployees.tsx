@@ -8,11 +8,13 @@ import {
   Eye,
   FileText,
   Clock,
+  CalendarCog,
 } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { Card, EmptyState, Avatar, AdminInput } from "@/components/admin/ui";
 import { EmployeeProfileModal } from "@/components/admin/EmployeeProfileModal";
 import { ConfirmModal } from "@/components/admin/ConfirmModal";
+import { EditLeaveBalanceModal } from "@/components/admin/EditLeaveBalanceModal";
 import {
   getAdminEmployees,
   departmentOf,
@@ -37,6 +39,7 @@ export function AdminEmployees() {
   const [companyFilter, setCompanyFilter] = useState("");
   const [deptFilter, setDeptFilter] = useState("");
   const [selected, setSelected] = useState<AdminEmployee | null>(null);
+  const [editingLeave, setEditingLeave] = useState<AdminEmployee | null>(null);
   const [tick, setTick] = useState(0);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ top?: number; bottom?: number; right: number }>({ right: 0 });
@@ -335,6 +338,16 @@ export function AdminEmployees() {
                                 <Clock className="w-3.5 h-3.5" /> View
                                 Attendance
                               </button>
+                              <button
+                                onClick={() => {
+                                  setMenuOpen(null);
+                                  setEditingLeave(e);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-slate-300 hover:bg-white/5 hover:text-white text-left"
+                              >
+                                <CalendarCog className="w-3.5 h-3.5" /> Edit
+                                Leave Balance
+                              </button>
                               {active ? (
                                 <button
                                   onClick={() => handleRemove(e)}
@@ -370,6 +383,16 @@ export function AdminEmployees() {
         <EmployeeProfileModal
           employee={selected}
           onClose={() => setSelected(null)}
+        />
+      )}
+
+      {editingLeave && (
+        <EditLeaveBalanceModal
+          username={editingLeave.username}
+          fullName={editingLeave.profile.fullName}
+          current={editingLeave.leave.balance}
+          onClose={() => setEditingLeave(null)}
+          onSaved={() => setEditingLeave(null)}
         />
       )}
 

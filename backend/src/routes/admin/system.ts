@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { db } from "../../db/knex";
 import { asyncHandler, parse } from "../../lib/errors";
-import { daysBetween, isValidDate, todayISO } from "../../lib/time";
+import { daysBetween, isValidDate, nowISO, todayISO } from "../../lib/time";
 import { logAudit } from "../../services/audit";
 import { defaultLeaveBalances, toProfiles, UserRow } from "../../services/users";
 import { leaveDto } from "../../services/records";
@@ -153,9 +153,12 @@ systemRouter.put(
             Emergency: z.coerce.number().int().min(0).max(365),
           })
           .optional(),
+        /** Existing staff whose balances should move by the same change. */
+        applyTo: z.array(z.string()).optional(),
       }),
       req.body,
     );
+    const before = await defaultLeaveBalances();
     const upsert = async (key: string, value: unknown) => {
       const v = JSON.stringify(value);
       if (await db("settings").where({ key }).first()) await db("settings").where({ key }).update({ value: v });
@@ -163,8 +166,40 @@ systemRouter.put(
     };
     if (body.companyName) await upsert("companyName", body.companyName);
     if (body.defaultLeave) await upsert("defaultLeave", body.defaultLeave);
-    await logAudit({ action: "settings_updated", actor: req.user!.username, target: "settings", detail: "Updated system settings." });
+    // New staff simply start with the new defaults. For chosen existing staff,
+    // add the difference (e.g. Annual 14 → 16 gives +2), so leave they have
+    // already taken still counts. Balances never go below 0.
+    let updatedStaff = 0;
+    if (body.defaultLeave && body.applyTo?.length) {
+      const diff = {
+        leave_annual: body.defaultLeave.Annual - before.Annual,
+        leave_medical: body.defaultLeave.Medical - before.Medical,
+        leave_emergency: body.defaultLeave.Emergency - before.Emergency,
+      };
+      if (diff.leave_annual || diff.leave_medical || diff.leave_emergency) {
+        const staff = await db<UserRow>("users").where({ auth_role: "staff" }).whereIn("username", body.applyTo);
+        for (const u of staff) {
+          await db("users").where({ id: u.id }).update({
+            leave_annual: Math.max(0, u.leave_annual + diff.leave_annual),
+            leave_medical: Math.max(0, u.leave_medical + diff.leave_medical),
+            leave_emergency: Math.max(0, u.leave_emergency + diff.leave_emergency),
+            updated_at: nowISO(),
+          });
+        }
+        updatedStaff = staff.length;
+      }
+    }
+    await logAudit({
+      action: "settings_updated",
+      actor: req.user!.username,
+      target: "settings",
+      detail: updatedStaff ? `Updated system settings and leave balances for ${updatedStaff} staff.` : "Updated system settings.",
+    });
     const name = await db("settings").where({ key: "companyName" }).first();
-    res.json({ ok: true, settings: { companyName: JSON.parse(name?.value ?? '"YES Empire Group"'), defaultLeave: await defaultLeaveBalances() } });
+    res.json({
+      ok: true,
+      updatedStaff,
+      settings: { companyName: JSON.parse(name?.value ?? '"YES Empire Group"'), defaultLeave: await defaultLeaveBalances() },
+    });
   }),
 );
