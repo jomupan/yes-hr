@@ -253,7 +253,7 @@ describe("admin", () => {
     const nurin = r.body.rows.find((x: any) => x.username === "nurin");
     expect(["Present", "Late"]).toContain(nurin.status);
     expect(r.body.summary.totalActive).toBe(2);
-    expect(r.body.rows.some((x: any) => xContentTypeOptions.username === "admin")).toBe(false);
+    expect(r.body.rows.some((x: any) => x.username === "admin")).toBe(false);
   });
 
   it("adds an evaluation the staff member can read", async () => {
@@ -335,5 +335,69 @@ describe("calendar notes", () => {
     expect((await request(app).delete(`/api/admin/calendar/${id}`).set(auth(adminToken))).status).toBe(200);
     const list = await request(app).get("/api/calendar?from=2026-11-01&to=2026-11-30").set(auth(staffToken));
     expect(list.body.events).toHaveLength(0);
+  });
+});
+
+describe("replacement leave", () => {
+  let sukma = "";
+  it("only admins can manage replacement leave", async () => {
+    expect((await request(app).get("/api/admin/replacement-leaves").set(auth(staffToken))).status).toBe(403);
+  });
+
+  it("admin adds one for all staff; staff see the balance and get notified", async () => {
+    const bad = await request(app).post("/api/admin/replacement-leaves").set(auth(adminToken)).send({ name: "", days: 0 });
+    expect(bad.status).toBe(400);
+    const r = await request(app).post("/api/admin/replacement-leaves").set(auth(adminToken))
+      .send({ name: "Replacement Leave SUKMA", days: 2, expiresOn: "2027-06-30" });
+    expect(r.status).toBe(201);
+    const entry = r.body.replacementLeaves.find((x: any) => x.name === "Replacement Leave SUKMA");
+    expect(entry.staff.some((s: any) => s.username === "nurin")).toBe(true);
+    expect(entry.staff.some((s: any) => s.username === "admin")).toBe(false);
+    sukma = entry.id;
+    const mine = await request(app).get("/api/me/leave").set(auth(staffToken));
+    expect(mine.body.replacement).toEqual([
+      expect.objectContaining({ id: sukma, name: "Replacement Leave SUKMA", balance: 2, expiresOn: "2027-06-30", expired: false }),
+    ]);
+    const n = await request(app).get("/api/notifications").set(auth(staffToken));
+    expect(n.body.notifications.some((x: any) => x.title === "Replacement Leave Added")).toBe(true);
+  });
+
+  it("staff apply for it; approval takes days from that replacement leave only", async () => {
+    const tooMany = await request(app).post("/api/me/leave").set(auth(staffToken))
+      .field("type", "Replacement").field("replacementId", sukma).field("from", "2027-01-11").field("to", "2027-01-13").field("reason", "Rest");
+    expect(tooMany.status).toBe(400);
+    const late = await request(app).post("/api/me/leave").set(auth(staffToken))
+      .field("type", "Replacement").field("replacementId", sukma).field("from", "2027-07-01").field("to", "2027-07-01").field("reason", "Rest");
+    expect(late.body.code).toBe("REPLACEMENT_EXPIRED");
+    const ok = await request(app).post("/api/me/leave").set(auth(staffToken))
+      .field("type", "Replacement").field("replacementId", sukma).field("from", "2027-01-11").field("to", "2027-01-11").field("reason", "Rest");
+    expect(ok.status).toBe(201);
+    expect(ok.body.application.typeLabel).toBe("Replacement Leave SUKMA");
+    const before = (await request(app).get("/api/me/leave").set(auth(staffToken))).body;
+    const blocked = await request(app).delete(`/api/admin/replacement-leaves/${sukma}`).set(auth(adminToken));
+    expect(blocked.status).toBe(400);
+    const appr = await request(app).patch(`/api/admin/leave/${ok.body.application.id}/status`).set(auth(adminToken)).send({ status: "Approved" });
+    expect(appr.status).toBe(200);
+    const after = (await request(app).get("/api/me/leave").set(auth(staffToken))).body;
+    expect(after.replacement[0].balance).toBe(1);
+    expect(after.balance).toEqual(before.balance); // Annual etc. untouched
+  });
+
+  it("expired entries can't be used; admin can change who has it and delete it", async () => {
+    const old = await request(app).post("/api/admin/replacement-leaves").set(auth(adminToken))
+      .send({ name: "Replacement Leave Jubli Selangor", days: 1, expiresOn: "2020-01-31", usernames: ["nurin"] });
+    const jubli = old.body.replacementLeaves.find((x: any) => x.name.includes("Jubli"));
+    expect(jubli.staff.map((s: any) => s.username)).toEqual(["nurin"]);
+    const r = await request(app).post("/api/me/leave").set(auth(staffToken))
+      .field("type", "Replacement").field("replacementId", jubli.id).field("from", "2027-02-01").field("to", "2027-02-01").field("reason", "Rest");
+    expect(r.body.code).toBe("REPLACEMENT_EXPIRED");
+    const upd = await request(app).put(`/api/admin/replacement-leaves/${jubli.id}`).set(auth(adminToken))
+      .send({ name: "Replacement Leave Jubli Selangor", days: 1, expiresOn: "2020-01-31", usernames: [] });
+    expect(upd.body.replacementLeaves.find((x: any) => x.id === jubli.id).staff).toHaveLength(0);
+    expect((await request(app).delete(`/api/admin/replacement-leaves/${sukma}`).set(auth(adminToken))).status).toBe(200);
+    const mine = (await request(app).get("/api/me/leave").set(auth(staffToken))).body;
+    expect(mine.replacement).toHaveLength(0);
+    // History still shows which replacement leave was taken.
+    expect(mine.applications.some((a: any) => a.typeLabel === "Replacement Leave SUKMA")).toBe(true);
   });
 });

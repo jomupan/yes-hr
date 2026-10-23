@@ -16,6 +16,7 @@ import {
   leaveBalance,
   leaveDto,
   payslipDto,
+  replacementBalances,
 } from "../services/records";
 import { newId, toProfile, UserRow } from "../services/users";
 import { sendAttendanceToSheet } from "../services/sheets";
@@ -182,13 +183,18 @@ meRouter.get(
 
 /* ───────────── Leave ───────────── */
 
-const LEAVE_TYPES = ["Annual", "Medical", "Emergency"] as const;
+const LEAVE_TYPES = ["Annual", "Medical", "Emergency", "Replacement"] as const;
 
 meRouter.get(
   "/leave",
   asyncHandler(async (req, res) => {
     const rows = await db("leave_applications").where({ user_id: req.user!.id }).orderBy("applied_at", "desc");
-    res.json({ ok: true, balance: leaveBalance(req.user!), applications: rows.map((r) => leaveDto(r, "me")) });
+    res.json({
+      ok: true,
+      balance: leaveBalance(req.user!),
+      replacement: await replacementBalances(req.user!.id),
+      applications: rows.map((r) => leaveDto(r, "me")),
+    });
   }),
 );
 
@@ -204,6 +210,7 @@ meRouter.post(
         from: z.string().refine(isValidDate, "Invalid start date."),
         to: z.string().refine(isValidDate, "Invalid end date."),
         reason: z.string().trim().min(1, "Please complete all fields.").max(2000),
+        replacementId: z.string().optional(),
       }),
       req.body,
     );
@@ -212,8 +219,23 @@ meRouter.post(
     if (body.type === "Medical" && !req.file)
       throw badRequest("A supporting document is required for Medical leave.", "ATTACHMENT_REQUIRED");
     const days = daysBetween(body.from, body.to) + 1;
-    const balance = leaveBalance(user)[body.type];
-    if (days > balance) throw badRequest(`Insufficient ${body.type} leave balance.`, "INSUFFICIENT_BALANCE");
+    let typeLabel: string | null = null;
+    if (body.type === "Replacement") {
+      // Replacement leave uses the staff member's own grant for that entry.
+      const grant = await db("replacement_grants as g")
+        .join("replacement_leaves as r", "r.id", "g.replacement_id")
+        .where({ "g.user_id": user.id, "g.replacement_id": body.replacementId || "" })
+        .select("r.name", "r.expires_on", "g.balance")
+        .first();
+      if (!grant) throw badRequest("Please choose which replacement leave to use.");
+      if (grant.expires_on && (todayISO() > grant.expires_on || body.to > grant.expires_on))
+        throw badRequest(`${grant.name} must be used by ${fmtDate(grant.expires_on)}.`, "REPLACEMENT_EXPIRED");
+      if (days > Number(grant.balance)) throw badRequest(`Insufficient ${grant.name} balance.`, "INSUFFICIENT_BALANCE");
+      typeLabel = grant.name;
+    } else {
+      const balance = leaveBalance(user)[body.type];
+      if (days > balance) throw badRequest(`Insufficient ${body.type} leave balance.`, "INSUFFICIENT_BALANCE");
+    }
 
     const overlap = await db("leave_applications")
       .where({ user_id: user.id })
@@ -238,14 +260,16 @@ meRouter.post(
       attachment_type: file?.type ?? null,
       attachment_size: file?.size ?? null,
       attachment_path: file?.path ?? null,
+      replacement_id: body.type === "Replacement" ? body.replacementId : null,
+      type_label: typeLabel,
     };
     try {
       await db.transaction(async (trx) => {
         await trx("leave_applications").insert(row);
         const f = fmtDate(body.from);
         const t = fmtDate(body.to);
-        await notify.leaveSubmitted(user.id, body.type, f, t, row.id, trx);
-        await notify.adminLeaveSubmitted(user.full_name, body.type, f, t, row.id, trx);
+        await notify.leaveSubmitted(user.id, typeLabel || body.type, f, t, row.id, trx);
+        await notify.adminLeaveSubmitted(user.full_name, typeLabel || body.type, f, t, row.id, trx);
       });
     } catch (e) {
       await deleteStored(file?.path);

@@ -7,6 +7,7 @@ import { payslipsRouter } from "./payslips";
 import { adminsRouter } from "./admins";
 import { systemRouter } from "./system";
 import { adminCalendarRouter } from "../calendar";
+import { replacementRouter } from "./replacement";
 
 /* Everything under /api/admin requires an authenticated admin. */
 export const adminRouter = Router();
@@ -18,3 +19,4 @@ adminRouter.use(attendanceRouter);
 adminRouter.use(payslipsRouter);
 adminRouter.use(adminsRouter);
 adminRouter.use(adminCalendarRouter);
+adminRouter.use(replacementRouter);

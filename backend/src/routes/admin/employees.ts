@@ -281,15 +281,29 @@ employeesRouter.patch(
       const prev = app.status;
       if (prev === body.status) return { app, changed: false };
 
-      const col = ({ Annual: "leave_annual", Medical: "leave_medical", Emergency: "leave_emergency" } as const)[
-        app.type as "Annual" | "Medical" | "Emergency"
-      ];
-      if (body.status === "Approved") {
-        if (user[col] < app.days)
-          throw badRequest(`${user.full_name} only has ${user[col]} ${app.type} day(s) left.`, "INSUFFICIENT_BALANCE");
-        await trx("users").where({ id: user.id }).update({ [col]: user[col] - app.days });
-      } else if (prev === "Approved") {
-        await trx("users").where({ id: user.id }).update({ [col]: user[col] + app.days });
+      if (app.type === "Replacement") {
+        // Replacement leave comes out of the staff member's grant for that entry.
+        const grant = await trx("replacement_grants").where({ replacement_id: app.replacement_id, user_id: user.id }).first();
+        const label = app.type_label || "replacement leave";
+        if (body.status === "Approved") {
+          if (!grant) throw badRequest(`${user.full_name} no longer has ${label}.`, "INSUFFICIENT_BALANCE");
+          if (Number(grant.balance) < app.days)
+            throw badRequest(`${user.full_name} only has ${grant.balance} day(s) of ${label} left.`, "INSUFFICIENT_BALANCE");
+          await trx("replacement_grants").where({ id: grant.id }).update({ balance: Number(grant.balance) - app.days });
+        } else if (prev === "Approved" && grant) {
+          await trx("replacement_grants").where({ id: grant.id }).update({ balance: Number(grant.balance) + app.days });
+        }
+      } else {
+        const col = ({ Annual: "leave_annual", Medical: "leave_medical", Emergency: "leave_emergency" } as const)[
+          app.type as "Annual" | "Medical" | "Emergency"
+        ];
+        if (body.status === "Approved") {
+          if (user[col] < app.days)
+            throw badRequest(`${user.full_name} only has ${user[col]} ${app.type} day(s) left.`, "INSUFFICIENT_BALANCE");
+          await trx("users").where({ id: user.id }).update({ [col]: user[col] - app.days });
+        } else if (prev === "Approved") {
+          await trx("users").where({ id: user.id }).update({ [col]: user[col] + app.days });
+        }
       }
       const patch = {
         status: body.status,
@@ -300,8 +314,9 @@ employeesRouter.patch(
       await trx("leave_applications").where({ id: app.id }).update(patch);
       const f = fmtDate(app.date_from);
       const t = fmtDate(app.date_to);
-      if (body.status === "Approved") await notify.leaveApproved(user.id, app.type, f, t, app.id, trx);
-      if (body.status === "Rejected") await notify.leaveRejected(user.id, app.type, f, t, app.id, body.rejectionReason, trx);
+      const typeName = app.type_label || app.type;
+      if (body.status === "Approved") await notify.leaveApproved(user.id, typeName, f, t, app.id, trx);
+      if (body.status === "Rejected") await notify.leaveRejected(user.id, typeName, f, t, app.id, body.rejectionReason, trx);
       await logAudit(
         { action: `leave_${body.status.toLowerCase()}`, actor: req.user!.username, target: user.username, detail: `${body.status} ${app.type} leave ${app.date_from} to ${app.date_to}.` },
         trx,

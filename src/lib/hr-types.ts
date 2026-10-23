@@ -91,10 +91,28 @@ export interface LeaveApplication {
   attachment?: LeaveAttachment | null;
   /** Admin-provided reason shown to staff when a leave is rejected. */
   rejectionReason?: string;
+  /** Replacement leave: which entry was used, and its name for display
+   *  (type is "Replacement" for these). */
+  replacementId?: string;
+  typeLabel?: string;
+}
+
+/** A staff member's replacement leave (e.g. "Replacement Leave SUKMA"). */
+export interface ReplacementBalance {
+  id: string;
+  name: string;
+  days: number;
+  /** Days left to use. */
+  balance: number;
+  /** Last day it can be used (YYYY-MM-DD), or null for no expiry. */
+  expiresOn: string | null;
+  expired: boolean;
 }
 
 export interface LeaveData {
   balance: Record<LeaveType, number>;
+  /** Replacement leave given by HR; empty when there is none. */
+  replacement?: ReplacementBalance[];
   applications: LeaveApplication[];
 }
 

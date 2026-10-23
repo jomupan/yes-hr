@@ -1,7 +1,7 @@
 import { db } from "../db/knex";
 import { dopeStatus, DopeResultDto, DopeStatus } from "../lib/dope";
 import { notify } from "./notifications";
-import { hoursBetween, isLateClockIn } from "../lib/time";
+import { hoursBetween, isLateClockIn, todayISO } from "../lib/time";
 import { toProfile, UserRow } from "./users";
 
 /* Row → DTO mappers. Every DTO matches the frontend types in
@@ -52,6 +52,8 @@ export function leaveDto(r: any, scope: "me" | "admin") {
   return {
     id: r.id,
     type: r.type,
+    typeLabel: r.type_label ?? undefined,
+    replacementId: r.replacement_id ?? undefined,
     from: r.date_from,
     to: r.date_to,
     days: r.days,
@@ -107,6 +109,24 @@ export function payslipDto(r: any, username: string, scope: "me" | "admin") {
   };
 }
 
+/** A staff member's replacement leave entries with days left. */
+export async function replacementBalances(userId: string) {
+  const rows = await db("replacement_grants as g")
+    .join("replacement_leaves as r", "r.id", "g.replacement_id")
+    .where("g.user_id", userId)
+    .select("r.id", "r.name", "r.days", "r.expires_on", "g.balance")
+    .orderBy("r.created_at", "asc");
+  const today = todayISO();
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    days: Number(r.days),
+    balance: Number(r.balance),
+    expiresOn: r.expires_on ?? null,
+    expired: !!r.expires_on && r.expires_on < today,
+  }));
+}
+
 export function leaveBalance(u: UserRow) {
   return { Annual: u.leave_annual, Medical: u.leave_medical, Emergency: u.leave_emergency };
 }
@@ -142,7 +162,11 @@ export async function buildSessionBundle(user: UserRow) {
     profile,
     dope: { history },
     attendance: { records: attRows.map((r) => attendanceDto(r, "me")) },
-    leave: { balance: leaveBalance(user), applications: leaveRows.map((r) => leaveDto(r, "me")) },
+    leave: {
+      balance: leaveBalance(user),
+      replacement: await replacementBalances(user.id),
+      applications: leaveRows.map((r) => leaveDto(r, "me")),
+    },
     claim: { claims: claimRows.map(claimDto) },
     evaluation: { evaluations: evalRows.map(evaluationDto) },
     status,

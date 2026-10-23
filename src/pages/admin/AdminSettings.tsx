@@ -3,6 +3,7 @@ import { Save, ShieldCheck } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { Card, AdminBtn, AdminInput } from "@/components/admin/ui";
 import { useAdminSession } from "@/hooks/use-admin-session";
+import { ReplacementLeaveCard } from "@/components/admin/ReplacementLeaveCard";
 
 export function AdminSettings() {
   const session = useAdminSession();
@@ -100,6 +101,10 @@ export function AdminSettings() {
             )}
           </div>
         </Card>
+      </div>
+
+      <div className="mt-4">
+        <ReplacementLeaveCard />
       </div>
 
       <div className="mt-4">

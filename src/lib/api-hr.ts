@@ -42,6 +42,8 @@ interface ApiLeave {
   appliedAt: string;
   attachment: ApiAttachment | null;
   rejectionReason?: string;
+  replacementId?: string;
+  typeLabel?: string;
 }
 
 function toAttachment(a: ApiAttachment | null): LeaveAttachment | null {
@@ -60,6 +62,8 @@ function toLeave(r: ApiLeave): LeaveApplication {
     appliedAt: r.appliedAt,
     attachment: toAttachment(r.attachment),
     rejectionReason: r.rejectionReason,
+    replacementId: r.replacementId,
+    typeLabel: r.typeLabel,
   };
 }
 
@@ -95,12 +99,18 @@ async function postForm<T>(path: string, form: FormData): Promise<T> {
 /* ---------- staff: leave ---------- */
 
 export async function fetchMyLeave(): Promise<LeaveData> {
-  const res = await api<{ balance: LeaveData["balance"]; applications: ApiLeave[] }>("/me/leave");
-  return { balance: res.balance, applications: res.applications.map(toLeave) };
+  const res = await api<{
+    balance: LeaveData["balance"];
+    replacement?: LeaveData["replacement"];
+    applications: ApiLeave[];
+  }>("/me/leave");
+  return { balance: res.balance, replacement: res.replacement || [], applications: res.applications.map(toLeave) };
 }
 
 export function applyLeave(input: {
-  type: LeaveType;
+  type: LeaveType | "Replacement";
+  /** Which replacement leave to use (only when type is "Replacement"). */
+  replacementId?: string;
   from: string;
   to: string;
   reason: string;
@@ -108,6 +118,7 @@ export function applyLeave(input: {
 }) {
   const form = new FormData();
   form.append("type", input.type);
+  if (input.replacementId) form.append("replacementId", input.replacementId);
   form.append("from", input.from);
   form.append("to", input.to);
   form.append("reason", input.reason);
@@ -182,6 +193,9 @@ export function reloadAdminLeave(): Promise<void> {
     .then((res) => {
       adminLeave = res.applications.map((r) => ({
         ...toLeave(r),
+        // Admin screens show the type as text; use the replacement leave's
+        // name (e.g. "Replacement Leave SUKMA") instead of just "Replacement".
+        type: (r.typeLabel || r.type) as LeaveType,
         appId: r.appId,
         username: r.username,
         fullName: r.fullName,

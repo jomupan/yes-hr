@@ -18,7 +18,8 @@ interface Props {
 
 export function Leave({ hr }: Props) {
   const session = hr.session!;
-  const [type, setType] = useState<LeaveType>("Annual");
+  // "Annual" / "Medical" / "Emergency", or "rep:<id>" for a replacement leave.
+  const [type, setType] = useState<string>("Annual");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [reason, setReason] = useState("");
@@ -36,6 +37,10 @@ export function Leave({ hr }: Props) {
   }, []);
 
   const types = Object.keys(session.leave.balance) as LeaveType[];
+  // Replacement leave given by HR. Only unexpired ones with days left can be applied for.
+  const reps = session.leave.replacement || [];
+  const usableReps = reps.filter((r) => !r.expired && r.balance > 0);
+  const selectedRep = type.startsWith("rep:") ? reps.find((r) => `rep:${r.id}` === type) : undefined;
   const apps = [...session.leave.applications].sort(
     (a, b) => new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime(),
   );
@@ -83,15 +88,31 @@ export function Leave({ hr }: Props) {
       return;
     }
     const days = daysBetween(from, to) + 1;
-    if (days > session.leave.balance[type]) {
+    if (selectedRep) {
+      if (days > selectedRep.balance) {
+        setError(`Insufficient ${selectedRep.name} balance.`);
+        return;
+      }
+      if (selectedRep.expiresOn && to > selectedRep.expiresOn) {
+        setError(`${selectedRep.name} must be used by ${fmtDate(selectedRep.expiresOn)}.`);
+        return;
+      }
+    } else if (days > session.leave.balance[type as LeaveType]) {
       setError(`Insufficient ${type} leave balance.`);
       return;
     }
     setSaving(true);
     try {
       // The server re-checks everything (balance, overlapping dates,
-      // Medical certificate) and notifies the admins.
-      await applyLeave({ type, from, to, reason: reason.trim(), attachment });
+      // Medical certificate, replacement expiry) and notifies the admins.
+      await applyLeave({
+        type: selectedRep ? "Replacement" : (type as LeaveType),
+        replacementId: selectedRep?.id,
+        from,
+        to,
+        reason: reason.trim(),
+        attachment,
+      });
       await refreshFromServer();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't submit. Please try again.");
@@ -133,6 +154,33 @@ export function Leave({ hr }: Props) {
             </div>
           </div>
         ))}
+        {reps.map((r) => (
+          <div
+            key={r.id}
+            className={[
+              "bg-card border border-border rounded-[10px] p-4",
+              r.expired || r.balance === 0 ? "opacity-60" : "",
+            ].join(" ")}
+          >
+            <div className="text-[11.5px] text-muted-foreground uppercase tracking-[0.05em]">
+              {r.name}
+            </div>
+            <div className="font-mono-hr text-[22px] font-semibold mt-1.5">
+              {r.balance}
+              <span className="text-[13px] ml-1">days</span>
+            </div>
+            {r.expiresOn && (
+              <div
+                className={[
+                  "text-[11.5px] mt-1",
+                  r.expired ? "text-[hsl(var(--red))]" : "text-muted-foreground",
+                ].join(" ")}
+              >
+                {r.expired ? "Expired" : "Use by"} {fmtDate(r.expiresOn)}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
 
       <div className="text-[13px] uppercase tracking-[0.06em] text-muted-foreground mt-[26px] mb-2.5">
@@ -161,7 +209,28 @@ export function Leave({ hr }: Props) {
               {t}
             </button>
           ))}
+          {usableReps.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => setType(`rep:${r.id}`)}
+              className={[
+                "px-3.5 py-2 rounded-full border text-[13px] cursor-pointer transition-colors",
+                type === `rep:${r.id}`
+                  ? "bg-[hsl(var(--ink))] text-white border-[hsl(var(--ink))]"
+                  : "bg-card text-[hsl(var(--ink))] border-border hover:bg-[hsl(var(--paper-2))]",
+              ].join(" ")}
+            >
+              {r.name}
+            </button>
+          ))}
         </div>
+        {selectedRep?.expiresOn && (
+          <div className="text-[12px] text-muted-foreground mt-2">
+            {selectedRep.name}: {selectedRep.balance} day(s) left, use by{" "}
+            {fmtDate(selectedRep.expiresOn)}.
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3.5">
           <div>
             <label
@@ -308,7 +377,7 @@ export function Leave({ hr }: Props) {
               apps.map((a) => (
                 <tr key={a.id}>
                   <td className="px-4 py-2.5 border-b border-border align-top last:border-b-0">
-                    {a.type}
+                    {a.typeLabel || a.type}
                   </td>
                   <td className="px-4 py-2.5 border-b border-border font-mono-hr align-top last:border-b-0">
                     {fmtDate(a.from)} → {fmtDate(a.to)}
