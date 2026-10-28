@@ -50,7 +50,8 @@ export const config = {
 
   /** Business rules carried over from the frontend. */
   rules: {
-    lateAfter: { hour: 8, minute: 15 },
+    // 8:30 is on time; 8:31 or later is Late.
+    lateAfter: { hour: 8, minute: 30 },
     defaultLeave: { Annual: 14, Medical: 14, Emergency: 3 },
     dopeValidDays: 182,
     dopeReminderDays: 14,

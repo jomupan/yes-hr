@@ -365,8 +365,8 @@ export function Leave({ hr }: Props) {
       <div className="text-[13px] uppercase tracking-[0.06em] text-muted-foreground mt-[26px] mb-2.5">
         Application history
       </div>
-      <div className="bg-card border border-border rounded-[10px] overflow-hidden shadow-[0_1px_2px_rgba(22,35,59,0.06),0_2px_10px_rgba(22,35,59,0.05)]">
-        <table className="w-full border-collapse text-[13.5px]">
+        <div className="bg-card border border-border rounded-[10px] overflow-x-auto shadow-[0_1px_2px_rgba(22,35,59,0.06),0_2px_10px_rgba(22,35,59,0.05)]">
+        <table className="w-full min-w-[640px] border-collapse text-[13.5px]">
           <thead>
             <tr>
               {["Type", "Period", "Reason", "Attachment", "Status"].map((h) => (

@@ -249,7 +249,7 @@ export function companyOf(profile: UserProfile): string {
   return profile.company?.trim() || "YES EMPIRE Group";
 }
 
-const LATE_THRESHOLD_MINUTES = 15; // clock in after 8:15 AM = Late
+const LATE_AFTER_MINUTES = 8 * 60 + 30; // 8:30 is on time; 8:31 or later = Late
 
 /* Compute attendance status for a single record on a given date. */
 export function attendanceStatusOf(
@@ -265,9 +265,7 @@ export function attendanceStatusOf(
   }
   // Completed shift — Late if clock-in was after the threshold.
   const ci = new Date(record.clockIn);
-  const lateLimit = new Date(ci);
-  lateLimit.setHours(8, 15, 0, 0);
-  return ci > lateLimit ? "Late" : "Present";
+  return ci.getHours() * 60 + ci.getMinutes() > LATE_AFTER_MINUTES ? "Late" : "Present";
 }
 
 function todayISO(): string {
