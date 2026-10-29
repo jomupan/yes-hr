@@ -22,11 +22,12 @@ export function dopeDto(r: any): DopeResultDto {
   };
 }
 
-export type AttendanceStatus = "Present" | "Late" | "Currently Working" | "Not Clocked In";
+export type AttendanceStatus = "Present" | "Late" | "Currently Working" | "Missed Clock-Out" | "Not Clocked In";
 
 export function attendanceStatusOf(r: any | undefined): AttendanceStatus {
   if (!r) return "Not Clocked In";
-  if (!r.clock_out) return "Currently Working";
+  // No clock-out on an earlier day = they forgot (HR can fill it in).
+  if (!r.clock_out) return r.date < todayISO() ? "Missed Clock-Out" : "Currently Working";
   return isLateClockIn(r.clock_in) ? "Late" : "Present";
 }
 
@@ -37,6 +38,7 @@ export function attendanceDto(r: any, scope: "me" | "admin") {
     date: r.date,
     clockIn: r.clock_in,
     clockOut: r.clock_out ?? null,
+    clockOutByAdmin: r.clock_out_by ?? undefined,
     location: r.location,
     clockOutLocation: r.clock_out_location,
     selfie: r.clock_in_selfie ? "Selfie captured" : "",

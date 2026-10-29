@@ -223,7 +223,12 @@ export function isOnLeaveOn(from: string, to: string, iso: string): boolean {
    underlying data source. */
 
 export type AttendanceStatus =
-  "Present" | "Late" | "Completed" | "Currently Working" | "Not Clocked In";
+  | "Present"
+  | "Late"
+  | "Completed"
+  | "Currently Working"
+  | "Missed Clock-Out"
+  | "Not Clocked In";
 
 /* A single attendance row enriched with the owning employee. */
 export interface AdminAttendanceRow {

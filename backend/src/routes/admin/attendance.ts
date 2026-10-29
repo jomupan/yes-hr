@@ -1,7 +1,11 @@
 import { Router } from "express";
+import { z } from "zod";
 import { db } from "../../db/knex";
-import { asyncHandler, badRequest, notFound } from "../../lib/errors";
-import { isValidDate, todayISO } from "../../lib/time";
+import { asyncHandler, badRequest, notFound, parse } from "../../lib/errors";
+import { fmtDate, isValidDate, localDateTimeToISO, todayISO } from "../../lib/time";
+import { logAudit } from "../../services/audit";
+import { createNotification } from "../../services/notifications";
+import { sendAttendanceToSheet } from "../../services/sheets";
 import { sendStored } from "../../lib/files";
 import { attendanceDto, attendanceStatusOf } from "../../services/records";
 import { toProfiles, UserRow } from "../../services/users";
@@ -122,5 +126,49 @@ attendanceRouter.get(
     const rel = req.params.kind === "out" ? rec?.clock_out_selfie : rec?.clock_in_selfie;
     if (!rec || !rel) throw notFound("Selfie not found.");
     await sendStored(res, rel, `selfie-${rec.date}-${req.params.kind}${rel.slice(rel.lastIndexOf("."))}`, rel.endsWith(".png") ? "image/png" : "image/jpeg", true);
+  }),
+);
+
+/* PATCH /attendance/:id/clock-out { time: "HH:MM" }
+   For staff who forgot to clock out: HR fills in (or corrects) the
+   clock-out time. The record is marked as set by that admin. */
+attendanceRouter.patch(
+  "/attendance/:id/clock-out",
+  asyncHandler(async (req, res) => {
+    const body = parse(
+      z.object({ time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Please enter a time like 17:30.") }),
+      req.body,
+    );
+    const rec = await db("attendance").where({ id: req.params.id }).first();
+    if (!rec) throw notFound("Attendance record not found.");
+    const clockOut = localDateTimeToISO(rec.date, body.time);
+    if (clockOut <= rec.clock_in) throw badRequest("Clock-out time must be after the clock-in time.");
+    if (clockOut > new Date().toISOString()) throw badRequest("Clock-out time can't be in the future.");
+    const patch = {
+      clock_out: clockOut,
+      clock_out_location: rec.clock_out_location || "Set by HR",
+      clock_out_by: req.user!.username,
+    };
+    await db("attendance").where({ id: rec.id }).update(patch);
+    const user = await db<UserRow>("users").where({ id: rec.user_id }).first();
+    const updated = { ...rec, ...patch };
+    if (user) {
+      await createNotification({
+        userId: user.id,
+        category: "attendance",
+        title: "Clock-Out Time Added",
+        message: `HR set your clock-out time for ${fmtDate(rec.date)} to ${body.time}.`,
+        actionLabel: "View Attendance",
+        actionModule: "attendance",
+      });
+      sendAttendanceToSheet(user, updated);
+    }
+    await logAudit({
+      action: "attendance_clock_out_set",
+      actor: req.user!.username,
+      target: user?.username || rec.user_id,
+      detail: `Set clock-out ${body.time} for ${rec.date}.`,
+    });
+    res.json({ ok: true, row: { status: attendanceStatusOf(updated), record: attendanceDto(updated, "admin") } });
   }),
 );

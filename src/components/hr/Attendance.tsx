@@ -322,7 +322,14 @@ export function Attendance({ hr }: Props) {
                     <SelfieThumb src={r.clockOutSelfie} />
                   </td>
                   <td className="px-4 py-2.5 border-b border-border font-mono-hr last:border-b-0">
-                    {r.clockOut ? `${workHours(r).toFixed(1)} hrs` : "-"}
+                    {r.clockOut ? (
+                      `${workHours(r).toFixed(1)} hrs${r.clockOutByAdmin ? " (set by HR)" : ""}`
+                    ) : r.date < todayISO() ? (
+                      // Forgot to clock out on an earlier day; HR can fill it in.
+                      <span className="text-[hsl(var(--red))] text-xs">Missed clock-out</span>
+                    ) : (
+                      "-"
+                    )}
                   </td>
                 </tr>
               ))

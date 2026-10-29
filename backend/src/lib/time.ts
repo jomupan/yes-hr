@@ -30,6 +30,15 @@ export function todayISO(): string {
   return localDate(new Date());
 }
 
+/** "2026-10-28" + "17:30" in the business timezone → UTC ISO string. */
+export function localDateTimeToISO(date: string, time: string): string {
+  const guess = new Date(`${date}T${time}:00Z`);
+  const p = parts(guess);
+  const shownAsUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute);
+  const offset = shownAsUTC - guess.getTime(); // timezone offset at that moment
+  return new Date(guess.getTime() - offset).toISOString();
+}
+
 export function nowISO(): string {
   return new Date().toISOString();
 }

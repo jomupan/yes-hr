@@ -452,3 +452,27 @@ describe("add leave days to chosen staff", () => {
     expect(ok.status).toBe(201);
   });
 });
+
+describe("missed clock-out", () => {
+  it("an earlier day without clock-out shows Missed Clock-Out and HR can set the time", async () => {
+    const nurin = await db("users").where({ username: "nurin" }).first();
+    // Clocked in at 08:20 Malaysia time on an old day and forgot to clock out.
+    await db("attendance").insert({
+      id: "missed-1", user_id: nurin.id, date: "2026-09-01",
+      clock_in: "2026-09-01T00:20:00.000Z", location: "Office", clock_out_location: "",
+    });
+    const before = await request(app).get("/api/admin/attendance/employee/nurin").set(auth(adminToken));
+    const row = before.body.rows.find((r: any) => r.record.id === "missed-1");
+    expect(row.status).toBe("Missed Clock-Out");
+    expect((await request(app).patch("/api/admin/attendance/missed-1/clock-out").set(auth(staffToken)).send({ time: "17:30" })).status).toBe(403);
+    expect((await request(app).patch("/api/admin/attendance/missed-1/clock-out").set(auth(adminToken)).send({ time: "07:00" })).status).toBe(400);
+    expect((await request(app).patch("/api/admin/attendance/missed-1/clock-out").set(auth(adminToken)).send({ time: "5pm" })).status).toBe(400);
+    const r = await request(app).patch("/api/admin/attendance/missed-1/clock-out").set(auth(adminToken)).send({ time: "17:30" });
+    expect(r.status).toBe(200);
+    expect(r.body.row.record.clockOut).toBe("2026-09-01T09:30:00.000Z"); // 17:30 in Malaysia
+    expect(r.body.row.record.clockOutByAdmin).toBe("admin");
+    expect(r.body.row.status).toBe("Present");
+    const n = await request(app).get("/api/notifications").set(auth(staffToken));
+    expect(n.body.notifications.some((x: any) => x.title === "Clock-Out Time Added")).toBe(true);
+  });
+});

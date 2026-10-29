@@ -32,6 +32,7 @@ type StatusFilter =
   | "Late"
   | "Completed"
   | "Currently Working"
+  | "Missed Clock-Out"
   | "Not Clocked In";
 
 const EMPTY_SUMMARY: AttendanceSummary = {
@@ -297,6 +298,7 @@ export function AdminAttendance() {
               <option value="Present">Present</option>
               <option value="Late">Late</option>
               <option value="Currently Working">Currently Working</option>
+              <option value="Missed Clock-Out">Missed Clock-Out</option>
               <option value="Completed">Completed</option>
               <option value="Not Clocked In">Not Clocked In</option>
             </AdminSelect>
@@ -464,6 +466,7 @@ export function AttendanceStatusBadge({ status }: { status: string }) {
     Late: { bg: "rgba(217,119,6,0.15)", color: "#fbbf24" },
     Completed: { bg: "rgba(59,130,246,0.15)", color: "#60a5fa" },
     "Currently Working": { bg: "rgba(245,158,11,0.15)", color: "#fbbf24" },
+    "Missed Clock-Out": { bg: "rgba(244,63,94,0.15)", color: "#fb7185" },
     "Not Clocked In": { bg: "rgba(239,68,68,0.15)", color: "#f87171" },
   };
   const s = map[status] || { bg: "rgba(148,163,184,0.15)", color: "#94a3b8" };

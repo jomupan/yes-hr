@@ -20,6 +20,7 @@ interface ApiAttendanceRecord {
   clockOutSelfie: string;
   late: boolean;
   hours: number | null;
+  clockOutByAdmin?: string;
 }
 
 interface ApiAdminRow {
@@ -35,7 +36,9 @@ interface ApiAdminRow {
 
 function toRecord(r: ApiAttendanceRecord): AttendanceRecord {
   return {
+    id: r.id,
     date: r.date,
+    clockOutByAdmin: r.clockOutByAdmin,
     clockIn: r.clockIn,
     clockOut: r.clockOut,
     location: r.location,
@@ -129,4 +132,10 @@ export async function fetchEmployeeAttendance(username: string): Promise<{
       hours: r.record.hours,
     })),
   };
+}
+
+/** Admin: fill in (or correct) the clock-out time, e.g. "17:30", for a
+ *  staff member who forgot to clock out. */
+export async function setClockOutTime(id: string, time: string): Promise<void> {
+  await api(`/admin/attendance/${encodeURIComponent(id)}/clock-out`, { method: "PATCH", body: { time } });
 }

@@ -48,6 +48,8 @@ export interface DopeData {
 }
 
 export interface AttendanceRecord {
+  /** Server record id (used by admins to fix a missed clock-out). */
+  id?: string;
   date: string;
   clockIn: string;
   clockOut: string | null;
@@ -59,6 +61,8 @@ export interface AttendanceRecord {
   clockInSelfie?: string;
   /** Base64 data URL of the clock-out selfie captured by the camera. */
   clockOutSelfie?: string;
+  /** Admin who filled in the clock-out time (staff forgot to clock out). */
+  clockOutByAdmin?: string;
 }
 
 export interface AttendanceData {

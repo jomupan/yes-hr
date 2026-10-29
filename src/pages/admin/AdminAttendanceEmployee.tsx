@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Calendar } from "lucide-react";
+import { ArrowLeft, Calendar, Pencil, X } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
-import { Card, EmptyState, Avatar } from "@/components/admin/ui";
+import { Card, EmptyState, Avatar, AdminBtn, AdminInput } from "@/components/admin/ui";
 import type { AdminAttendanceRow } from "@/lib/admin-store";
 import type { UserProfile } from "@/lib/hr-types";
-import { fetchEmployeeAttendance } from "@/lib/api-attendance";
+import { fetchEmployeeAttendance, setClockOutTime } from "@/lib/api-attendance";
 import { fmtDate, fmtTime } from "@/lib/hr-store";
 import { AttendanceStatusBadge } from "./AdminAttendance";
 
@@ -17,6 +17,9 @@ export function AdminAttendanceEmployee() {
     to: "",
   });
   const [lightbox, setLightbox] = useState<string | null>(null);
+  // Row whose clock-out time HR is filling in (staff forgot to clock out).
+  const [fixing, setFixing] = useState<AdminAttendanceRow | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
 
   // Loaded from the server so records from every device are included.
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -25,7 +28,7 @@ export function AdminAttendanceEmployee() {
   useEffect(() => {
     if (!username) return;
     let cancelled = false;
-    setLoading(true);
+    if (reloadTick === 0) setLoading(true);
     fetchEmployeeAttendance(username)
       .then((res) => {
         if (cancelled) return;
@@ -41,7 +44,7 @@ export function AdminAttendanceEmployee() {
     return () => {
       cancelled = true;
     };
-  }, [username]);
+  }, [username, reloadTick]);
 
   const filtered = allRecords.filter((r) => {
     if (range.from && r.record.date < range.from) return false;
@@ -200,9 +203,31 @@ export function AdminAttendanceEmployee() {
                             />
                           </td>
                           <td className="px-4 py-3 font-mono-hr text-slate-300">
-                            {r.record.clockOut
-                              ? fmtTime(r.record.clockOut)
-                              : "-"}
+                            {r.record.clockOut ? (
+                              <div className="flex items-center gap-1.5">
+                                {fmtTime(r.record.clockOut)}
+                                {r.record.clockOutByAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setFixing(r)}
+                                    className="text-[10.5px] font-sans text-slate-500 hover:text-amber-300 inline-flex items-center gap-0.5"
+                                    title={`Set by ${r.record.clockOutByAdmin}. Click to change.`}
+                                  >
+                                    (set by HR <Pencil className="w-3 h-3" />)
+                                  </button>
+                                )}
+                              </div>
+                            ) : r.status === "Missed Clock-Out" ? (
+                              <button
+                                type="button"
+                                onClick={() => setFixing(r)}
+                                className="font-sans text-[12px] font-semibold text-amber-300 border border-amber-500/40 rounded-md px-2 py-1 hover:bg-amber-500/10"
+                              >
+                                Set time
+                              </button>
+                            ) : (
+                              "-"
+                            )}
                           </td>
                           <td className="px-4 py-3">
                             <AdminSelfieThumb
@@ -212,9 +237,13 @@ export function AdminAttendanceEmployee() {
                           </td>
                           <td className="px-4 py-3 font-mono-hr text-slate-300">
                             {r.hours == null ? (
-                              <span className="text-amber-300">
-                                In Progress
-                              </span>
+                              r.status === "Missed Clock-Out" ? (
+                                <span className="text-rose-300">-</span>
+                              ) : (
+                                <span className="text-amber-300">
+                                  In Progress
+                                </span>
+                              )
                             ) : (
                               `${r.hours.toFixed(1)} hrs`
                             )}
@@ -235,6 +264,17 @@ export function AdminAttendanceEmployee() {
             Total working hours in range: {totalHours.toFixed(1)} hrs
           </div>
         </>
+      )}
+
+      {fixing && (
+        <SetClockOutModal
+          row={fixing}
+          onClose={() => setFixing(null)}
+          onSaved={() => {
+            setFixing(null);
+            setReloadTick((t) => t + 1);
+          }}
+        />
       )}
 
       {/* Full-size selfie lightbox */}
@@ -287,6 +327,78 @@ function MiniStat({ label, value }: { label: string; value: string }) {
         {value}
       </div>
       <div className="text-[11px] text-slate-400 mt-0.5">{label}</div>
+    </div>
+  );
+}
+
+/** HR fills in the clock-out time for a day the staff member forgot. */
+function SetClockOutModal({
+  row,
+  onClose,
+  onSaved,
+}: {
+  row: AdminAttendanceRow;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const current = row.record.clockOut ? fmtTime(row.record.clockOut) : "17:30";
+  const [time, setTime] = useState(/^\d{2}:\d{2}$/.test(current) ? current : "17:30");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const save = async () => {
+    if (saving || !row.record.id) return;
+    setSaving(true);
+    setError("");
+    try {
+      await setClockOutTime(row.record.id, time);
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't save. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={onClose}>
+      <div
+        className="bg-[#111726] border border-white/10 rounded-[14px] w-full max-w-[400px] shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sco-title"
+      >
+        <div className="flex items-start justify-between p-5 border-b border-white/10">
+          <div>
+            <h3 id="sco-title" className="text-base font-bold text-white">Set Clock-Out Time</h3>
+            <div className="text-[12px] text-slate-400 mt-0.5">
+              {fmtDate(row.record.date)} · clocked in at {fmtTime(row.record.clockIn)}
+            </div>
+          </div>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-white" aria-label="Close">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-5">
+          <label htmlFor="sco-time" className="block text-[11px] uppercase tracking-wide text-slate-500 mb-1.5">
+            Clock-out time
+          </label>
+          <AdminInput id="sco-time" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+          <p className="text-[11.5px] text-slate-500 mt-2">
+            The record will show this was set by HR, and the staff member is notified.
+          </p>
+          {error && <p className="text-xs text-rose-300 mt-3">{error}</p>}
+        </div>
+        <div className="flex justify-end gap-2 p-5 border-t border-white/10">
+          <AdminBtn variant="secondary" onClick={onClose} disabled={saving}>
+            Cancel
+          </AdminBtn>
+          <AdminBtn variant="primary" onClick={() => void save()} disabled={saving || !time}>
+            {saving ? "Saving…" : "Save"}
+          </AdminBtn>
+        </div>
+      </div>
     </div>
   );
 }
