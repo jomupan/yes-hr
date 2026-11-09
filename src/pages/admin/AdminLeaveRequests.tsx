@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Search, X, Check, FileText, Download } from "lucide-react";
+import { Search, X, Check, FileText, Download, Eye } from "lucide-react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import {
   Card,
@@ -13,6 +13,7 @@ import {
 import type { AdminLeaveRow } from "@/lib/admin-store";
 import { setLeaveStatusOnServer, useAdminLeaveApps } from "@/lib/api-hr";
 import { downloadAttachment, fmtDate } from "@/lib/hr-store";
+import { viewAttachment } from "@/lib/attachment";
 import { useAdminSession } from "@/hooks/use-admin-session";
 
 export function AdminLeaveRequests() {
@@ -256,13 +257,23 @@ export function AdminLeaveRequests() {
                         </div>
                       </div>
                     </div>
-                    <button
-                      onClick={() => downloadAttachment(selected.attachment!)}
-                      className="flex items-center gap-1 text-amber-300 hover:text-amber-200 text-xs font-medium flex-shrink-0"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      View
-                    </button>
+                    {/* View opens it in a new tab; Download saves a copy. */}
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <button
+                        onClick={() => viewAttachment(selected.attachment!)}
+                        className="flex items-center gap-1 text-amber-300 hover:text-amber-200 text-xs font-medium"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        View
+                      </button>
+                      <button
+                        onClick={() => downloadAttachment(selected.attachment!)}
+                        className="flex items-center gap-1 text-slate-400 hover:text-white text-xs font-medium"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        Download
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="text-sm text-slate-500 bg-[#0e1320] border border-white/10 rounded-lg p-3">

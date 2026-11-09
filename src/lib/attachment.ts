@@ -84,6 +84,18 @@ export function downloadAttachment(att: LeaveAttachment): void {
   document.body.removeChild(a);
 }
 
+/** Open the document in a new tab to look at it (no download).
+ *  Server files are asked to show "inline"; old in-browser files can't
+ *  be opened in a tab, so those are downloaded instead. */
+export function viewAttachment(att: LeaveAttachment): void {
+  if (att.dataUrl.startsWith("data:")) {
+    downloadAttachment(att);
+    return;
+  }
+  const url = att.dataUrl + (att.dataUrl.includes("?") ? "&" : "?") + "inline=1";
+  window.open(url, "_blank", "noopener");
+}
+
 /** Human-readable file size. */
 export function formatFileSize(bytes: number): string {
   if (!bytes) return "0 B";
