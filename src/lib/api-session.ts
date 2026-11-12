@@ -8,6 +8,7 @@ import type { UserProfile } from "./hr-types";
 import { authApi, ApiError, getToken, isRemembered, setToken, type AuthResponse, type ApiSessionBundle } from "./api";
 import { syncMyAttendance } from "./api-attendance";
 import { syncMyHrRecords } from "./api-hr";
+import { refreshPushOwner } from "./push";
 import { getSessionUsername, getUser, getUserIndex, setJSON, setSession, setUserIndex } from "./hr-store";
 
 /** Write the server's profile into the local store (keeps local-only fields). */
@@ -35,6 +36,8 @@ export function startServerSession(res: AuthResponse, remember = false): void {
   setSession(res.session.username);
   markActive();
   pageAccount = currentAccount();
+  // If this phone has notifications on, link it to the person who just logged in.
+  void refreshPushOwner();
 }
 
 /* ---------- one account per device ----------

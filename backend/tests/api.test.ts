@@ -476,3 +476,46 @@ describe("missed clock-out", () => {
     expect(n.body.notifications.some((x: any) => x.title === "Clock-Out Time Added")).toBe(true);
   });
 });
+
+describe("phone notifications", () => {
+  it("saves and removes a phone subscription", async () => {
+    const k = await request(app).get("/api/me/push/key").set(auth(staffToken));
+    expect(k.status).toBe(200);
+    expect(k.body.enabled).toBe(false); // no keys in tests
+    const sub = { endpoint: "https://push.example.com/abc", keys: { p256dh: "p", auth: "a" } };
+    expect((await request(app).post("/api/me/push/subscribe").set(auth(staffToken)).send(sub)).status).toBe(201);
+    expect(await db("push_subscriptions").where({ endpoint: sub.endpoint }).count({ n: "*" }).first()).toMatchObject({ n: expect.anything() });
+    expect((await request(app).post("/api/me/push/subscribe").send(sub)).status).toBe(401);
+    await request(app).post("/api/me/push/unsubscribe").set(auth(staffToken)).send({ endpoint: sub.endpoint });
+    expect(await db("push_subscriptions").where({ endpoint: sub.endpoint }).first()).toBeUndefined();
+  });
+
+  it("reminds the right staff", async () => {
+    const { staffToRemind } = await import("../src/services/reminders");
+    const day = "2027-05-04";
+    const nurin = await db("users").where({ username: "nurin" }).first();
+    const aina = await db("users").where({ username: "aina" }).first();
+    // Nobody clocked in yet: both active staff get the clock-in reminder; nobody gets clock-out.
+    let ins = await staffToRemind("in", day);
+    expect(ins).toEqual(expect.arrayContaining([nurin.id]));
+    expect(await staffToRemind("out", day)).toEqual([]);
+    // Nurin clocks in: no clock-in reminder for her, but a clock-out reminder.
+    await db("attendance").insert({ id: "rem-1", user_id: nurin.id, date: day, clock_in: `${day}T00:20:00.000Z`, location: "x", clock_out_location: "" });
+    ins = await staffToRemind("in", day);
+    expect(ins).not.toContain(nurin.id);
+    expect(await staffToRemind("out", day)).toEqual([nurin.id]);
+    // Aina on approved leave that day: no clock-in reminder.
+    await db("leave_applications").insert({ id: "rem-l", user_id: aina.id, type: "Annual", date_from: day, date_to: day, days: 1, reason: "x", status: "Approved", applied_at: `${day}T00:00:00.000Z` });
+    expect(await staffToRemind("in", day)).not.toContain(aina.id);
+    // Clocked out: no clock-out reminder.
+    await db("attendance").where({ id: "rem-1" }).update({ clock_out: `${day}T09:30:00.000Z` });
+    expect(await staffToRemind("out", day)).toEqual([]);
+  });
+});
+
+describe("scheduled jobs", () => {
+  it("can't be triggered without the cron secret", async () => {
+    expect((await request(app).get("/api/cron/reminders")).status).toBe(401);
+    expect((await request(app).get("/api/cron/cleanup").set("Authorization", "Bearer wrong")).status).toBe(401);
+  });
+});

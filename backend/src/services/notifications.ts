@@ -3,6 +3,7 @@ import { db } from "../db/knex";
 import { config } from "../config";
 import { nowISO } from "../lib/time";
 import { newId } from "./users";
+import { queuePush } from "./push";
 
 /* Notification copy is kept identical to src/lib/notification-store.ts so
    the frontend renders the same messages once it switches to the API. */
@@ -84,6 +85,8 @@ export async function createNotification(input: CreateInput, trx: Knex = db): Pr
     .limit(1000)
     .pluck("id");
   if (keep.length) await trx("notifications").whereIn("id", keep).del();
+  // Also pop it up on their phone (if they allowed notifications).
+  queuePush([input.userId], { title: input.title, body: input.message, url: "/" });
 }
 
 /** Fan out to every active admin; each keeps independent read state. */
@@ -122,6 +125,7 @@ export async function notifyEveryone(
     })),
     100,
   );
+  queuePush(ids, { title: input.title, body: input.message, url: "/" });
 }
 
 /* ---------- domain triggers (same wording as the frontend) ---------- */

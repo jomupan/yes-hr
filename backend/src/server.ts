@@ -3,6 +3,7 @@ import { config } from "./config";
 import { db, migrateLatest } from "./db/knex";
 import { seed } from "./db/seed";
 import { startSelfieCleanup } from "./services/selfie-cleanup";
+import { startReminders } from "./services/reminders";
 
 async function main() {
   // Bring the schema up to date and make sure the default accounts exist.
@@ -12,7 +13,10 @@ async function main() {
   const server = app.listen(config.port, () => {
     console.log(`✔ YES Elevate API running on http://localhost:${config.port}/api  (db: ${config.dbClient}, tz: ${config.timezone})`);
   });
+  // Delete selfies older than 24 hours (times and locations are kept).
   startSelfieCleanup();
+  // Clock-in / clock-out reminders on staff phones.
+  startReminders();
   const shutdown = () => {
     server.close(() => db.destroy().then(() => process.exit(0)));
   };

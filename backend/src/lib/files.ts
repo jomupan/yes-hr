@@ -9,7 +9,7 @@ import { badRequest, notFound } from "./errors";
 
 /* File storage. Files get a random server-generated name; the user's
    original file name is only kept as metadata and is never used as a path.
-   Same rules as the frontend: PDF / JPG / JPEG / PNG only, max 5 MB,
+   Same rules as the frontend: PDF / JPG / JPEG / PNG only, max 4 MB,
    executables rejected.
 
    Two places a file can live (config.fileStorage):
@@ -50,7 +50,7 @@ export interface StoredFile {
 }
 
 export function validateUpload(file: { originalname: string; mimetype: string; size: number; buffer: Buffer }): void {
-  if (file.size > config.maxUploadBytes) throw badRequest("File size must not exceed 5 MB.", "FILE_TOO_LARGE");
+  if (file.size > config.maxUploadBytes) throw badRequest(`File size must not exceed ${config.maxUploadBytes / 1024 / 1024} MB.`, "FILE_TOO_LARGE");
   const lower = (file.originalname || "").toLowerCase();
   if (/\.(exe|bat|cmd|sh|msi|dll|scr|com|js|jar)$/i.test(lower)) throw badRequest(TYPE_ERROR, "FILE_TYPE");
   if (!ALLOWED_EXT.some((e) => lower.endsWith(e))) throw badRequest(TYPE_ERROR, "FILE_TYPE");

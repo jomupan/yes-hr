@@ -14,7 +14,7 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
     return;
   }
   if (err instanceof multer.MulterError) {
-    const msg = err.code === "LIMIT_FILE_SIZE" ? "File size must not exceed 5 MB." : err.message;
+    const msg = err.code === "LIMIT_FILE_SIZE" ? `File size must not exceed ${config.maxUploadBytes / 1024 / 1024} MB.` : err.message;
     res.status(400).json({ ok: false, error: msg, code: "UPLOAD" });
     return;
   }

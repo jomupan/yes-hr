@@ -153,7 +153,7 @@ export function UploadPayslipModal({
               className="w-full text-[13px] text-slate-300 file:mr-3 file:px-3 file:py-2 file:rounded-lg file:border-0 file:bg-amber-500/20 file:text-amber-200 file:font-semibold file:cursor-pointer"
             />
             <div className="text-[11px] text-slate-500 mt-1">
-              Accepted formats: PDF, JPG, JPEG, PNG · Max 5 MB
+              Accepted formats: PDF, JPG, JPEG, PNG · Max 4 MB
             </div>
             {file && (
               <div className="mt-2 text-[12px] text-slate-300">
@@ -334,7 +334,7 @@ export function ReplacePayslipModal({
               className="w-full text-[13px] text-slate-300 file:mr-3 file:px-3 file:py-2 file:rounded-lg file:border-0 file:bg-amber-500/20 file:text-amber-200 file:font-semibold file:cursor-pointer"
             />
             <div className="text-[11px] text-slate-500 mt-1">
-              Accepted formats: PDF, JPG, JPEG, PNG · Max 5 MB
+              Accepted formats: PDF, JPG, JPEG, PNG · Max 4 MB
             </div>
           </div>
           {error && (

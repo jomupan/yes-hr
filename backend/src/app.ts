@@ -10,15 +10,21 @@ import { requireAuth } from "./middleware/auth";
 import { errorHandler, notFoundHandler } from "./middleware/error";
 import { authRouter } from "./routes/auth";
 import { publicRouter } from "./routes/public";
+import { pushRouter } from "./routes/push";
 import { meRouter } from "./routes/me";
 import { notificationsRouter } from "./routes/notifications";
 import { adminRouter } from "./routes/admin";
 import { calendarRouter } from "./routes/calendar";
+import { cronRouter } from "./routes/cron";
 
 export function createApp() {
   const app = express();
   app.disable("x-powered-by");
   app.set("trust proxy", 1);
+  // Old address after moving hosts: forward everyone to the new one.
+  if (config.redirectTo) {
+    app.use((req, res) => res.redirect(301, config.redirectTo + req.originalUrl));
+  }
   app.use(
     helmet({
       crossOriginResourcePolicy: { policy: "cross-origin" },
@@ -60,8 +66,10 @@ export function createApp() {
     res.json({ ok: true, service: "yeselevate-backend", time: new Date().toISOString() });
   });
 
+  app.use("/api/cron", cronRouter);
   app.use("/api/auth", authRouter);
   app.use("/api/public", publicRouter);
+  app.use("/api/me/push", requireAuth, pushRouter);
   app.use("/api/me", requireAuth, meRouter);
   app.use("/api/notifications", requireAuth, notificationsRouter);
   app.use("/api/calendar", requireAuth, calendarRouter);

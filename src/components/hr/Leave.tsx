@@ -340,7 +340,7 @@ export function Leave({ hr }: Props) {
                 </label>
               )}
               <div className="text-[11px] text-muted-foreground mt-1">
-                Accepted formats: PDF, JPG, JPEG, PNG · Maximum file size: 5 MB
+                Accepted formats: PDF, JPG, JPEG, PNG · Maximum file size: 4 MB
               </div>
               {fileError && (
                 <div className="text-[hsl(var(--red))] text-xs mt-1">

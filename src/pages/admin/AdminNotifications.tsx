@@ -7,6 +7,7 @@ import { useAdminSession } from "@/hooks/use-admin-session";
 import { useNotifications } from "@/hooks/use-notifications";
 import { timeAgo } from "@/components/admin/AdminNotificationBell";
 import type { NotificationCategory } from "@/lib/hr-types";
+import { PushToggle } from "@/components/PushToggle";
 
 type Filter = "all" | "unread" | NotificationCategory;
 
@@ -70,6 +71,8 @@ export function AdminNotifications() {
           </button>
         )}
       </div>
+
+      <PushToggle dark />
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2 mb-4">

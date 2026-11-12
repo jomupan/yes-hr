@@ -7,7 +7,7 @@
  *  - /api requests are NEVER cached, so HR data is always live and one
  *    person's data can't be served to another.
  * Bump VERSION to force every phone to drop the old cache. */
-const VERSION = "yes-hr-v1";
+const VERSION = "yes-hr-v2";
 const SHELL = ["/", "/login", "/manifest.webmanifest", "/favicon.svg", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -62,4 +62,38 @@ self.addEventListener("fetch", (event) => {
       ),
     );
   }
+});
+
+/* ---------- Phone notifications ----------
+   The server sends { title, body, url, tag }. Tapping the notification
+   opens (or focuses) the app. */
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: "YES HR", body: event.data ? event.data.text() : "" };
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || "YES HR", {
+      body: data.body || "",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      tag: data.tag || undefined,
+      data: { url: data.url || "/" },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
+      for (const w of wins) {
+        if (w.url.startsWith(self.location.origin) && "focus" in w) return w.focus();
+      }
+      return self.clients.openWindow(url);
+    }),
+  );
 });

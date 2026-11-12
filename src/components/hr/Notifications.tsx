@@ -4,6 +4,7 @@ import type { ModuleId, NotificationCategory } from "@/lib/hr-types";
 import type { UseHrSession } from "@/hooks/use-hr-session";
 import { useNotifications } from "@/hooks/use-notifications";
 import { fmtDate, fmtTime } from "@/lib/hr-store";
+import { PushToggle } from "@/components/PushToggle";
 
 interface Props {
   hr: UseHrSession;
@@ -69,6 +70,8 @@ export function Notifications({ hr, onNavigate }: Props) {
           </button>
         )}
       </div>
+
+      <PushToggle />
 
       <div className="flex gap-2 flex-wrap mb-5">
         {FILTERS.map((f) => (

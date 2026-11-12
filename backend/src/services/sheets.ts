@@ -1,4 +1,5 @@
 import { config } from "../config";
+import { background } from "../lib/background";
 import { attendanceDto } from "./records";
 import { toProfile, UserRow } from "./users";
 
@@ -14,7 +15,7 @@ const timeOf = (iso: string | null | undefined) =>
 
 export function sendAttendanceToSheet(user: UserRow, row: Record<string, any>): void {
     if (!config.sheetsWebhookUrl) return;
-    void (async () => {
+    background((async () => {
         try {
             const profile = await toProfile(user);
             const rec = attendanceDto(row, "admin");
@@ -43,5 +44,5 @@ export function sendAttendanceToSheet(user: UserRow, row: Record<string, any>): 
         } catch (e) {
             console.error("Google Sheet update failed:", e instanceof Error ? e.message : e);
         }
-    })();
+    })());
 }

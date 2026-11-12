@@ -2,9 +2,9 @@ import type { LeaveAttachment } from "./hr-types";
 
 /* ---------- leave attachment validation ----------
    Frontend validation mirrors the rules a backend would enforce:
-   allow-listed MIME types, max 5 MB, no executables. The original file
+   allow-listed MIME types, max 4 MB, no executables. The original file
    name is sanitised and never used as a storage path. */
-export const ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+export const ATTACHMENT_MAX_BYTES = 4 * 1024 * 1024; // 4 MB (the hosting service limits uploads)
 const ATTACHMENT_ALLOWED = [
   "application/pdf",
   "image/jpeg",
@@ -21,7 +21,7 @@ export interface AttachmentValidation {
 /** Validate a File before it is read/stored. */
 export function validateAttachment(file: File): AttachmentValidation {
   if (file.size > ATTACHMENT_MAX_BYTES) {
-    return { ok: false, error: "File size must not exceed 5 MB." };
+    return { ok: false, error: "File size must not exceed 4 MB." };
   }
   const name = (file.name || "").toLowerCase();
   const extOk = ATTACHMENT_ALLOWED_EXT.some((ext) => name.endsWith(ext));

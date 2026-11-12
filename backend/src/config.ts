@@ -8,7 +8,8 @@ function num(v: string | undefined, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-const nodeEnv = process.env.NODE_ENV || "development";
+// On Vercel, treat the live app as production even if NODE_ENV isn't set.
+const nodeEnv = process.env.NODE_ENV || (process.env.VERCEL ? "production" : "development");
 
 export const config = {
   port: num(process.env.PORT, 4000),
@@ -38,10 +39,24 @@ export const config = {
   /** Built website to serve alongside the API (main folder: npm run build).
    *  Relative to the backend folder, like the other paths here. */
   frontendDist: path.resolve(process.env.FRONTEND_DIST || "../dist"),
-  maxUploadBytes: num(process.env.MAX_UPLOAD_MB, 5) * 1024 * 1024,
+  // 4 MB: Vercel refuses requests bigger than about 4.5 MB.
+  maxUploadBytes: num(process.env.MAX_UPLOAD_MB, 4) * 1024 * 1024,
+  /** Secret Vercel Cron sends with scheduled jobs (set CRON_SECRET on Vercel). */
+  cronSecret: process.env.CRON_SECRET || "",
+  /** When set (e.g. on the old Render copy), send every visitor to this address instead. */
+  redirectTo: (process.env.REDIRECT_TO || "").replace(/\/+$/, ""),
   selfieKeepHours: num(process.env.SELFIE_KEEP_HOURS, 24),
   sheetsWebhookUrl: process.env.SHEETS_WEBHOOK_URL || "",
   sheetsSecret: process.env.SHEETS_SECRET || "",
+  /** Phone notifications (Web Push). Make keys with: npx web-push generate-vapid-keys */
+  vapidPublicKey: process.env.VAPID_PUBLIC_KEY || "",
+  vapidPrivateKey: process.env.VAPID_PRIVATE_KEY || "",
+  vapidSubject: process.env.VAPID_SUBJECT || "mailto:hr@yesempire.com",
+  /** Work hours, for the clock-in / clock-out reminders. */
+  workStart: process.env.WORK_START || "08:30",
+  workEnd: process.env.WORK_END || "17:30",
+  /** How many minutes before work starts / ends to remind staff. */
+  reminderMinutesBefore: num(process.env.REMINDER_MINUTES_BEFORE, 5),
 
   seedAdminPassword: process.env.SEED_ADMIN_PASSWORD || "admin123",
   seedStaffPassword: process.env.SEED_STAFF_PASSWORD || "staff123",

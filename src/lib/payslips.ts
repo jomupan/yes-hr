@@ -170,7 +170,7 @@ export function validatePayslipFile(file: File): {
   error?: string;
 } {
   if (file.size > ATTACHMENT_MAX_BYTES) {
-    return { ok: false, error: "File size must not exceed 5 MB." };
+    return { ok: false, error: "File size must not exceed 4 MB." };
   }
   const v = validateAttachment(file);
   if (!v.ok) return v;
